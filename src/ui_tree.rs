@@ -37,7 +37,7 @@ trait Composable {
   fn compose(&mut self, composer: &mut Composer);
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct PlatformView {
   underlying_view: Rc<RefCell<dyn PlatformViewInner>>,
   is_node: bool,
@@ -118,6 +118,10 @@ where
   }
 
   fn label(&mut self, label: String) {
+    self
+      .platform_view
+      .update_prop("label", Box::new(label.clone()))
+      .unwrap();
     self.label = Some(label)
   }
 
@@ -377,7 +381,7 @@ impl<'a> StackLayout {
 struct DummyPlatformView {
   el_type: &'static str,
   props: Rc<RefCell<Vec<(String, Box<dyn Prop>)>>>,
-  children: Vec<Rc<Box<dyn PlatformViewInner>>>,
+  children: Vec<PlatformView>,
 }
 
 impl DummyPlatformView {
@@ -396,7 +400,23 @@ impl DummyPlatformView {
 use std::fmt::Formatter;
 impl Debug for DummyPlatformView {
   fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-    write!(f, "{} View {{{:?}}}", self.el_type, self.props.borrow())
+    write!(
+      f,
+      "{} View (props = {:?})",
+      self.el_type,
+      self.props.borrow()
+    )?;
+    if !self.children.is_empty() {
+      write!(f, "{:#?}", self.children)?;
+    }
+    Ok(())
+  }
+}
+
+impl Debug for PlatformView {
+  fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+    write!(f, "{:?}", self.underlying_view.borrow())?;
+    Ok(())
   }
 }
 
@@ -414,22 +434,31 @@ impl PlatformViewInner for DummyPlatformView {
   /// If you append a child that is attached somewhere else, you should move the child.
   fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
     println!("Appending Child {:?} to {:?}", c, self);
+    self.children.push(c.clone());
     Ok(())
   }
 
   fn insert_child_at(&mut self, c: &PlatformView, idx: usize) -> Result<(), Box<dyn Error>> {
     println!("Appending Child {:?} to {:?} at idx: {}", c, self, idx);
+    self.children.insert(idx, c.clone());
     Ok(())
   }
 
   /// should not tear down the child! since it may be placed somewhere else later
   fn remove_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
     println!("Removing Child {:?} From {:?}", c, self);
+    self.children = self
+      .children
+      .drain(..)
+      .into_iter()
+      .filter(|v| !Rc::ptr_eq(&v.underlying_view, &c.underlying_view))
+      .collect();
     Ok(())
   }
   /// Should not tear down the child (same as remove_child)
   fn remove_child_index(&mut self, idx: usize) -> Result<(), Box<dyn Error>> {
     println!("Removing Child at {:?} From {:?}", idx, self);
+    self.children.remove(idx);
     Ok(())
   }
 }
@@ -632,8 +661,10 @@ mod tests {
       executor.run_until_stalled();
     });
 
-    println!("{:?}", composer.position_context);
-    println!("tx {:?}", composer.transactions);
+    assert_eq!(
+      "StackLayout View (props = [])[\n    Text View (props = [(\"text\", \"Hello World\")]),\n    Text View (props = [(\"text\", \"Breaking news,\")]),\n    Text View (props = [(\"text\", \"It was true\")]),\n    Button View (props = [(\"label\", \"Press me to get rid of me!\")]),\n]",
+      format!("{:?}", root.underlying_view)
+    );
     assert_eq!(composer.position_context.get_current_idx(), 4);
 
     btn_press();
@@ -647,6 +678,10 @@ mod tests {
 
     assert_eq!(*my_state_clone2.lock_ref(), false);
     assert_eq!(composer.position_context.get_current_idx(), 3);
+    assert_eq!(
+      "StackLayout View (props = [])[\n    Text View (props = [(\"text\", \"Hello World\")]),\n    Text View (props = [(\"text\", \"It was not true\")]),\n    Text View (props = [(\"text\", \"This will only show if false\")]),\n]",
+      format!("{:?}", root.underlying_view)
+    );
 
     // assert_eq!(
     //   format!("{:?}", button.platform_view.underlying_view),
