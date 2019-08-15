@@ -1,3 +1,5 @@
+pub mod ui_tree;
+
 #[cfg(test)]
 mod tests {
     #[test]

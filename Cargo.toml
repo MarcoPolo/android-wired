@@ -7,3 +7,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+futures-signals = "0.3.7"
+futures-preview = "=0.3.0-alpha.18"
+futures-timer = "0.3.0"
+discard = "1.0.4"
+
+[patch.crates-io]
+futures-signals = { path = "../futures-signals" }
