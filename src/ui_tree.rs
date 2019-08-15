@@ -39,21 +39,21 @@ trait Composable {
 
 #[derive(Clone, Debug)]
 struct PlatformView {
-  underlying_view: Rc<dyn PlatformViewInner>,
+  underlying_view: Rc<RefCell<dyn PlatformViewInner>>,
   is_node: bool,
 }
 
 trait Prop: Debug + Any {}
 trait PlatformViewInner: Debug {
-  fn update_prop(&self, s: &str, v: Box<dyn Prop>) -> Result<(), Box<dyn Error>>;
+  fn update_prop(&mut self, s: &str, v: Box<dyn Prop>) -> Result<(), Box<dyn Error>>;
   /// If you append a child that is attached somewhere else, you should move the child.
-  fn append_child(&self, c: &dyn PlatformViewInner) -> Result<(), Box<dyn Error>>;
+  fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>>;
   /// Do not insert a child that is already there! undefined behavior!
-  fn insert_child_at(&self, c: &dyn PlatformViewInner, idx: usize) -> Result<(), Box<dyn Error>>;
+  fn insert_child_at(&mut self, c: &PlatformView, idx: usize) -> Result<(), Box<dyn Error>>;
   /// should not tear down the child! since it may be placed somewhere else later
-  fn remove_child(&self, c: &dyn PlatformViewInner) -> Result<(), Box<dyn Error>>;
+  fn remove_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>>;
   /// Should not tear down the child (same as remove_child)
-  fn remove_child_index(&self, idx: usize) -> Result<(), Box<dyn Error>>;
+  fn remove_child_index(&mut self, idx: usize) -> Result<(), Box<dyn Error>>;
 }
 
 impl Prop for String {}
@@ -105,10 +105,9 @@ where
   where
     S: 'static + Signal<Item = String>,
   {
-    let platform_view = self.platform_view.clone();
+    let mut platform_view = self.platform_view.clone();
     let f = s.for_each(move |i| {
       platform_view
-        .underlying_view
         .update_prop("label", Box::new(i.clone()))
         .expect("view is there");
       ready(())
@@ -148,13 +147,12 @@ impl Composable for Text {
 
 impl Text {
   fn new(text: String) -> Self {
-    let t = Text {
+    let mut t = Text {
       underlying_view: Some(DummyPlatformView::new("Text")),
     };
     t.underlying_view
-      .as_ref()
+      .as_mut()
       .unwrap()
-      .underlying_view
       .update_prop("text", Box::new(text))
       .unwrap();
     t
@@ -286,16 +284,11 @@ impl Composer {
   // }
 
   fn add_view(&mut self, view: &mut PlatformView) -> Result<(), Box<dyn Error>> {
-    if let Some(curent_parent) = self.curent_parent.take() {
+    if let Some(mut curent_parent) = self.curent_parent.take() {
       let res = if self.in_transaction {
-        curent_parent.underlying_view.insert_child_at(
-          &*view.underlying_view,
-          self.position_context.get_current_idx(),
-        )
+        curent_parent.insert_child_at(view, self.position_context.get_current_idx())
       } else {
-        curent_parent
-          .underlying_view
-          .append_child(&*view.underlying_view)
+        curent_parent.append_child(view)
       };
       if !self.transactions.is_empty() {
         let current_idx = self.position_context.get_current_idx();
@@ -346,7 +339,7 @@ impl Composer {
         })
         .collect();
     }
-    parent.underlying_view.remove_child_index(idx_to_remove)?;
+    parent.remove_child_index(idx_to_remove)?;
     self.position_context.dec();
 
     Ok(())
@@ -390,11 +383,11 @@ struct DummyPlatformView {
 impl DummyPlatformView {
   fn new(el_type: &'static str) -> PlatformView {
     PlatformView {
-      underlying_view: Rc::new(DummyPlatformView {
+      underlying_view: Rc::new(RefCell::new(DummyPlatformView {
         el_type,
         props: Rc::new(RefCell::new(vec![])),
         children: vec![],
-      }),
+      })),
       is_node: false,
     }
   }
@@ -408,7 +401,7 @@ impl Debug for DummyPlatformView {
 }
 
 impl PlatformViewInner for DummyPlatformView {
-  fn update_prop(&self, s: &str, v: Box<dyn Prop>) -> Result<(), Box<dyn Error>> {
+  fn update_prop(&mut self, s: &str, v: Box<dyn Prop>) -> Result<(), Box<dyn Error>> {
     println!("Updating {} on {:?} with {:?}", s, self, v);
     let mut props = self.props.borrow_mut();
     if let Some(i) = props.iter().position(|(p, _)| p == s) {
@@ -419,25 +412,48 @@ impl PlatformViewInner for DummyPlatformView {
     Ok(())
   }
   /// If you append a child that is attached somewhere else, you should move the child.
-  fn append_child(&self, c: &dyn PlatformViewInner) -> Result<(), Box<dyn Error>> {
+  fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
     println!("Appending Child {:?} to {:?}", c, self);
     Ok(())
   }
 
-  fn insert_child_at(&self, c: &dyn PlatformViewInner, idx: usize) -> Result<(), Box<dyn Error>> {
+  fn insert_child_at(&mut self, c: &PlatformView, idx: usize) -> Result<(), Box<dyn Error>> {
     println!("Appending Child {:?} to {:?} at idx: {}", c, self, idx);
     Ok(())
   }
 
   /// should not tear down the child! since it may be placed somewhere else later
-  fn remove_child(&self, c: &dyn PlatformViewInner) -> Result<(), Box<dyn Error>> {
+  fn remove_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
     println!("Removing Child {:?} From {:?}", c, self);
     Ok(())
   }
   /// Should not tear down the child (same as remove_child)
-  fn remove_child_index(&self, idx: usize) -> Result<(), Box<dyn Error>> {
+  fn remove_child_index(&mut self, idx: usize) -> Result<(), Box<dyn Error>> {
     println!("Removing Child at {:?} From {:?}", idx, self);
     Ok(())
+  }
+}
+
+impl PlatformViewInner for PlatformView {
+  fn update_prop(&mut self, s: &str, v: Box<dyn Prop>) -> Result<(), Box<dyn Error>> {
+    self.underlying_view.borrow_mut().update_prop(s, v)
+  }
+  /// If you append a child that is attached somewhere else, you should move the child.
+  fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
+    self.underlying_view.borrow_mut().append_child(c)
+  }
+
+  fn insert_child_at(&mut self, c: &PlatformView, idx: usize) -> Result<(), Box<dyn Error>> {
+    self.underlying_view.borrow_mut().insert_child_at(c, idx)
+  }
+
+  /// should not tear down the child! since it may be placed somewhere else later
+  fn remove_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
+    self.underlying_view.borrow_mut().remove_child(c)
+  }
+  /// Should not tear down the child (same as remove_child)
+  fn remove_child_index(&mut self, idx: usize) -> Result<(), Box<dyn Error>> {
+    self.underlying_view.borrow_mut().remove_child_index(idx)
   }
 }
 
