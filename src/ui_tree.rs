@@ -10,6 +10,7 @@ use futures_timer::{Delay, Interval};
 use std::any::Any;
 use std::cell::RefCell;
 use std::mem;
+use std::panic::{catch_unwind, RefUnwindSafe, UnwindSafe};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -282,16 +283,24 @@ impl Composer {
       })
       .collect();
 
-    self.transactions = vec![];
+    let total_item_count = self.transactions.len();
+    if !self.transactions.is_empty() {
+      // self.position_context.dec();
+    }
 
-    for idx in removals {
+    self.transactions = vec![];
+    for idx in 0..total_item_count {
       info!(
         "Removing view at {} + {}",
         self.transaction_start_idx.get_current_idx(),
-        idx
+        self.position_context.get_current_idx(),
       );
+
       self
-        .remove_view_at(self.transaction_start_idx.get_current_idx() + idx)
+        .remove_view_at(
+          self.transaction_start_idx.get_current_idx() + self.position_context.get_current_idx()
+            - 1,
+        )
         .unwrap();
     }
   }
@@ -371,26 +380,26 @@ impl Composer {
       self.position_context.get_current_idx()
     );
 
-    if !self.transactions.is_empty() {
-      self.transactions = self
-        .transactions
-        .iter()
-        .map(|t| match t {
-          Transaction::Add(idx) => {
-            if *idx > idx_to_remove {
-              Transaction::Add(idx - 1)
-            } else {
-              Transaction::Add(*idx)
-            }
-          }
-        })
-        .collect();
-    }
+    // if !self.transactions.is_empty() {
+    //   self.transactions = self
+    //     .transactions
+    //     .iter()
+    //     .map(|t| match t {
+    //       Transaction::Add(idx) => {
+    //         if *idx > idx_to_remove {
+    //           Transaction::Add(idx - 1)
+    //         } else {
+    //           Transaction::Add(*idx)
+    //         }
+    //       }
+    //     })
+    //     .collect();
+    // }
     debug!("Calling remove child index");
     parent.remove_child_index(idx_to_remove)?;
     self.position_context.dec();
     debug!(
-      "Position context is {}",
+      "Removed child!! Position context is now {}",
       self.position_context.get_current_idx()
     );
 

@@ -3,6 +3,7 @@ package dev.fruit.androiddemo
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.os.*
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
@@ -12,6 +13,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.jawnnypoo.physicslayout.PhysicsLinearLayout
 import org.jetbrains.anko.Orientation
 import org.jetbrains.anko.doAsync
 import org.jetbrains.anko.uiThread
@@ -323,7 +325,8 @@ class WiredTextView(val mContext: Context): TextView(mContext), WiredPlatformVie
     override fun updateProp(k: String, v: Float) {
         when (k) {
             "text_size" -> textSize = v
-            "left_pad" -> setPadding(v.toInt(), 0, 0, 0)
+            "left_pad" -> setPadding(v.toInt(), paddingTop, paddingRight, paddingBottom)
+            "top_pad" -> setPadding(paddingLeft, v.toInt(), paddingRight, paddingBottom)
             "set_x" -> x = v
             "set_y" -> y = v
         }
@@ -348,7 +351,12 @@ class WiredLinearLayout(val mContext: Context): LinearLayout(mContext), WiredPla
     }
 
     override fun updateProp(k: String, v: Float) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        when (k) {
+            "height" -> layoutParams = ViewGroup.LayoutParams(layoutParams.width, v.toInt())
+            "width" -> layoutParams = ViewGroup.LayoutParams(v.toInt(), layoutParams.height)
+            "set_x" -> x = v
+            "set_y" -> y = v
+        }
     }
 
     override fun updateProp(k: String, v: Any) {
@@ -356,6 +364,37 @@ class WiredLinearLayout(val mContext: Context): LinearLayout(mContext), WiredPla
             "orientation" ->  when(v as String) {
                 "Vertical" -> orientation = LinearLayout.VERTICAL
                 "Horizontal" -> orientation = LinearLayout.HORIZONTAL
+            }
+        }
+    }
+}
+
+class WiredPhysicsLayout(val mContext: Context): PhysicsLinearLayout(mContext), WiredPlatformView {
+    override fun updateProp(k: String, v: RustCallback) {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
+    override fun updateProp(k: String, v: Float) {
+        when (k) {
+            "height" -> layoutParams = ViewGroup.LayoutParams(layoutParams.width, v.toInt())
+            "width" -> layoutParams = ViewGroup.LayoutParams(v.toInt(), layoutParams.height)
+            "set_x" -> x = v
+            "set_y" -> y = v
+        }
+    }
+
+    override fun updateProp(k: String, v: Any) {
+        when (k) {
+            "orientation" ->  when(v as String) {
+                "Vertical" -> orientation = LinearLayout.VERTICAL
+                "Horizontal" -> orientation = LinearLayout.HORIZONTAL
+            }
+            "fling" ->  when(v as String) {
+                "on" -> {
+                    physics.enableFling()
+                    physics.enablePhysics()
+                }
+                "off" -> orientation = LinearLayout.HORIZONTAL
             }
         }
     }
@@ -390,7 +429,11 @@ class WiredButton(mContext: Context): Button(mContext), WiredPlatformView {
 
     override fun updateProp(k: String, v: Float) {
         when (k) {
-            "text_size" -> textSize = v as Float
+            "text_size" -> textSize = v
+            "left_pad" -> setPadding(v.toInt(), paddingTop, paddingRight, paddingBottom)
+            "top_pad" -> setPadding(paddingLeft, v.toInt(), paddingRight, paddingBottom)
+            "set_x" -> x = v
+            "set_y" -> y = v
         }
     }
 
@@ -431,6 +474,24 @@ class WiredViewFactory(val mContext: Context) {
         l.gravity = Gravity.CENTER
         l.orientation = LinearLayout.VERTICAL
         return l
+    }
+
+    fun createPhysicsLayout(): WiredPlatformView {
+        val l = WiredPhysicsLayout(mContext)
+//        val l = WiredLinearLayout(mContext)
+//        l.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        l.physics.disablePhysics()
+//        l.physics.disableFling()
+        l.layoutParams = ViewGroup.LayoutParams(500, 500)
+//        l.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+//        l.addView(createBtnView() as View)
+//        l.physics.enablePhysics()
+        l.physics.enableFling()
+//        l.setBackgroundColor(Color.BLUE)
+//        l.height = 500
+//        l.width = 500
+        return l
+//        return createStackLayoutView()
     }
 }
 

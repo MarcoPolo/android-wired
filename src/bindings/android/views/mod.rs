@@ -36,6 +36,7 @@ macro_rules! auto_compose {
   };
 }
 
+auto_compose!(PhysicsLayout);
 auto_compose!(StackLayout);
 auto_compose!(Text);
 auto_compose!(Button);
@@ -101,10 +102,18 @@ impl Text {
     t
   }
 
-  pub fn padding_left(mut self, f: f32) -> Self {
+  pub fn pad_left(mut self, f: f32) -> Self {
     self
       .inner
       .update_prop("left_pad", Box::new(f))
+      .expect("Couldn't update left padding");
+    self
+  }
+
+  pub fn pad_top(mut self, f: f32) -> Self {
+    self
+      .inner
+      .update_prop("top_pad", Box::new(f))
       .expect("Couldn't update left padding");
     self
   }
@@ -279,44 +288,39 @@ impl StackLayout {
     self
   }
 
+  pub fn set_x(mut self, f: f32) -> Self {
+    self
+      .inner
+      .update_prop("set_x", Box::new(f))
+      .expect("Couldn't update");
+    self
+  }
+
+  pub fn set_y(mut self, f: f32) -> Self {
+    self
+      .inner
+      .update_prop("set_y", Box::new(f))
+      .expect("Couldn't update");
+    self
+  }
+
   pub fn with<F>(mut self, f: F) -> Self
   where
     F: FnOnce(),
   {
-    // let last_parent = COMPOSER.with(|composer| {
     COMPOSER.with(|composer| {
       let mut composer = composer.borrow_mut();
       std::mem::swap(&mut self.inner, composer.curent_parent.as_mut().unwrap());
-      // composer.curent_parent.replace(self.inner)
-      // composer.curent_parent = Some(self.inner.clone());
-      // last_parent
     });
 
     f();
 
-    // let my_view = COMPOSER.with(move |composer| {
     COMPOSER.with(|composer| {
       let mut composer = composer.borrow_mut();
-      // let my_view = composer.curent_parent.take().expect("I should get myself back");
       std::mem::swap(&mut self.inner, composer.curent_parent.as_mut().unwrap());
-      // composer.curent_parent = last_parent;
-      // my_view
-
-      // composer.curent_parent = last_parent;
-      // prev_parent
     });
 
     self
-  }
-
-  pub(crate) fn get_native_view(&self) -> Result<GlobalRef, Box<dyn Error>> {
-    self.inner.get_raw_view().map(move |v| {
-      v.lock()
-        .expect("Couldn't get lock")
-        .downcast_ref::<GlobalRef>()
-        .expect("Not a global ref")
-        .clone()
-    })
   }
 }
 
@@ -374,7 +378,7 @@ impl PlatformViewInner for WiredNativeView {
         ],
       )?;
     } else {
-      info!("COULDN'T UPDATE");
+      info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!               COULDN'T UPDATE");
     }
     Ok(())
   }
@@ -458,5 +462,105 @@ impl PlatformViewInner for WiredNativeView {
 
   fn get_raw_view(&self) -> Result<Arc<Mutex<dyn Any>>, Box<dyn Error>> {
     Ok(self.native_view.clone())
+  }
+}
+
+// Physics layout
+
+pub struct PhysicsLayout {
+  pub(crate) inner: PlatformView,
+}
+
+impl Composable for PhysicsLayout {
+  fn compose(&mut self, composer: &mut Composer) {
+    info!("Composing physics layout");
+    composer
+      .add_view(&mut self.inner)
+      .expect("Couldn't add view");
+  }
+}
+
+impl Default for PhysicsLayout {
+  fn default() -> Self {
+    PhysicsLayout::new()
+  }
+}
+
+impl PhysicsLayout {
+  pub fn new() -> Self {
+    VIEWFACTORY.with(|view_factory| {
+      let mut view_factory_ref = view_factory.borrow_mut();
+      let view_factory = view_factory_ref.as_mut().expect("No View Factory");
+      let env = view_factory.jvm.get_env().expect("Couldn't get env");
+      let native_view = env
+        .call_method(
+          view_factory.inner.as_obj(),
+          "createPhysicsLayout",
+          "()Ldev/fruit/androiddemo/WiredPlatformView;",
+          &[],
+        )
+        .unwrap();
+      PhysicsLayout::new_from_native_view(
+        view_factory.jvm.clone(),
+        env.new_global_ref(native_view.l().unwrap()).unwrap(),
+      )
+    })
+  }
+
+  pub fn new_from_native_view(jvm: Arc<JavaVM>, n: GlobalRef) -> Self {
+    let underlying_view = WiredNativeView {
+      kind: "PhysicsLayout",
+      jvm,
+      native_view: wrap_native_view(n),
+    };
+    PhysicsLayout {
+      inner: PlatformView::new(underlying_view),
+    }
+  }
+
+  pub fn orientation(mut self, o: style::Orientation) -> Self {
+    let string: String = o.to_string();
+    self
+      .inner
+      .update_prop("orientation", Box::new(string))
+      .expect("Couldn't update orientation");
+    self
+  }
+
+  pub fn height(mut self, f: f32) -> Self {
+    info!("UPDATING Height!!!");
+    self
+      .inner
+      .update_prop("height", Box::new(f))
+      .expect("Couldn't update");
+    self
+  }
+
+  pub fn width(mut self, f: f32) -> Self {
+    info!("UPDATING width!!");
+    self
+      .inner
+      .update_prop("width", Box::new(f))
+      .expect("Couldn't update");
+    self
+  }
+
+  pub fn with<F>(mut self, f: F) -> Self
+  where
+    F: FnOnce(),
+  {
+    COMPOSER.with(|composer| {
+      let mut composer = composer.borrow_mut();
+      std::mem::swap(&mut self.inner, composer.curent_parent.as_mut().unwrap());
+    });
+
+    f();
+
+    COMPOSER.with(|composer| {
+      let mut composer = composer.borrow_mut();
+      std::mem::swap(&mut self.inner, composer.curent_parent.as_mut().unwrap());
+    });
+
+    self
   }
 }
