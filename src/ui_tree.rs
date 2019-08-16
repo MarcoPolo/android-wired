@@ -313,27 +313,33 @@ impl Composer {
   pub fn add_view(&mut self, view: &mut PlatformView) -> Result<(), Box<dyn Error>> {
     if let Some(mut curent_parent) = self.curent_parent.take() {
       let res = if self.in_transaction {
+        debug!(
+          "Inserting CHILD AT {} + {}",
+          self.transaction_start_idx.get_current_idx(),
+          self.position_context.get_current_idx()
+        );
         curent_parent.insert_child_at(view, self.position_context.get_current_idx())
       } else {
         curent_parent.append_child(view)
       };
-      if !self.transactions.is_empty() {
-        let current_idx = self.position_context.get_current_idx();
-        // If we are modifying something before a recorded transaction, let's shift the transaction
-        self.transactions = self
-          .transactions
-          .iter()
-          .map(|t| match t {
-            Transaction::Add(idx) => {
-              if *idx > current_idx {
-                Transaction::Add(idx + 1)
-              } else {
-                Transaction::Add(*idx)
-              }
-            }
-          })
-          .collect();
-      }
+      // if !self.transactions.is_empty() {
+      //   let current_idx = self.position_context.get_current_idx();
+      //   // If we are modifying something before a recorded transaction, let's shift the transaction
+      //   self.transactions = self
+      //     .transactions
+      //     .iter()
+      //     .map(|t| match t {
+      //       Transaction::Add(idx) => {
+      //         if *idx > current_idx {
+      //           Transaction::Add(idx + 1)
+      //         } else {
+      //           Transaction::Add(*idx)
+      //         }
+      //       }
+      //     })
+      //     .collect();
+      // }
+
       if self.in_transaction {
         self.transactions.push(Transaction::Add(
           self.position_context.get_current_idx() - self.transaction_start_idx.get_current_idx(),
@@ -352,6 +358,12 @@ impl Composer {
       .as_mut()
       .expect("A parent is set to work on");
     debug!("Got parent");
+    debug!("Calling remove child index {}", idx_to_remove);
+    debug!(
+      "Position context is {}",
+      self.position_context.get_current_idx()
+    );
+
     if !self.transactions.is_empty() {
       self.transactions = self
         .transactions
@@ -370,6 +382,10 @@ impl Composer {
     debug!("Calling remove child index");
     parent.remove_child_index(idx_to_remove)?;
     self.position_context.dec();
+    debug!(
+      "Position context is {}",
+      self.position_context.get_current_idx()
+    );
 
     Ok(())
   }

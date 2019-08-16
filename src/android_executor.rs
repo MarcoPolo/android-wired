@@ -12,11 +12,11 @@ use {
   std::{
     cell::RefCell,
     future::Future,
+    panic::{catch_unwind, RefUnwindSafe, UnwindSafe},
     sync::mpsc::{sync_channel, Receiver, SyncSender},
     sync::{Arc, Mutex, MutexGuard},
     task::{Context, Poll},
     time::Duration,
-panic::{catch_unwind, RefUnwindSafe, UnwindSafe},
   },
 };
 
@@ -178,8 +178,31 @@ impl Spawner {
       future: Mutex::new(Some(future)),
       task_sender: self.task_sender.clone(),
     });
-    info!("Sending task!");
-    self.task_sender.send(task).expect("too many tasks queued");
+    debug!("running task first");
+    let mut already_done = false;
+    {
+
+    let mut future_slot = task.future.lock().unwrap();
+    if let Some(mut future) = future_slot.take() {
+      // Create a `LocalWaker` from the task itself
+      let waker = waker_ref(&task);
+      let context = &mut Context::from_waker(&*waker);
+      // `BoxFuture<T>` is a type alias for
+      // `Pin<Box<dyn Future<Output = T> + Send + 'static>>`.
+      // We can get a `Pin<&mut dyn Future + Send + 'static>`
+      // from it by calling the `Pin::as_mut` method.
+      if let Poll::Pending = future.as_mut().poll(context) {
+        // We're not done processing the future, so put it
+        // back in its task to be run again in the future.
+        *future_slot = Some(future);
+      } else {
+        already_done = true;
+      }
+    }
+    }
+    if !already_done {
+      self.task_sender.send(task).expect("too many tasks queued");
+    }
   }
 }
 

@@ -320,7 +320,10 @@ class WiredTextView(val mContext: Context): TextView(mContext), WiredPlatformVie
 
     override fun updateProp(k: String, v: Float) {
         when (k) {
-            "text_size" -> textSize = v as Float
+            "text_size" -> textSize = v
+            "left_pad" -> setPadding(v.toInt(), 0, 0, 0)
+            "set_x" -> x = v
+            "set_y" -> y = v
         }
     }
 
@@ -451,7 +454,8 @@ class MainActivity : AppCompatActivity() {
 
         // Load the librust library. Manually doing for quick reload
         super.onCreate(savedInstanceState)
-        val libraryPath = "/data/data/${getApplicationInfo().packageName}/lib"
+//        val libraryPath = "/data/data/${getApplicationInfo().packageName}/lib"
+        val libraryPath = applicationInfo.nativeLibraryDir
         val directory = File(libraryPath)
         val files = directory.listFiles()
         files.sortBy { f -> f.lastModified() }

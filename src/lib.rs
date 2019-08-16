@@ -4,6 +4,8 @@ pub mod bindings;
 pub mod helpers;
 pub mod ui_tree;
 
+mod slides;
+
 #[macro_use]
 extern crate log;
 #[cfg(target_os = "android")]
@@ -130,7 +132,8 @@ pub unsafe extern "C" fn Java_dev_fruit_androiddemo_MainActivity_init(
         //     .expect("Creating global ref should work");
 
         // let composer = ui_tree::Composer::new();
-        let app_root = app::main();
+        // let app_root = app::main();
+        let app_root = slides::main();
         env.call_method(
             root_View.as_obj(),
             "appendChild",

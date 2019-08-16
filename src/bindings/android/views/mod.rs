@@ -103,8 +103,67 @@ impl Text {
     t
   }
 
-  pub fn text(mut self, s: String) -> Self {
-    self.text_mut(s);
+  pub fn padding_left(mut self, f: f32) -> Self {
+    self
+      .inner
+      .update_prop("left_pad", Box::new(f))
+      .expect("Couldn't update left padding");
+    self
+  }
+
+  pub fn x_pos_signal<S>(mut self, s: S) -> Self
+  where
+    S: 'static + Signal<Item = f32> + Send,
+  {
+    let mut platform_view = self.inner.clone();
+    let f = s.for_each(move |i| {
+      platform_view
+        .update_prop("set_x", Box::new(i))
+        .expect("view is there");
+      ready(())
+    });
+
+    let cancel = spawn_future(f);
+    let handle = DiscardOnDrop::leak(cancel);
+    let cleanup = Box::new(move || {
+      handle.discard();
+    });
+    // DiscardOnDrop::leak(cancel);
+    // let id = AFTER_REMOVE_CALLBACKS.with(move |r| {
+    //   let after_remove = r.borrow_mut();
+    //   // after_remove.push(cleanup);
+    //   after_remove.len()
+    // });
+
+    self.after_remove.push(cleanup);
+    self
+  }
+
+  pub fn padding_left_signal<S>(mut self, s: S) -> Self
+  where
+    S: 'static + Signal<Item = f32> + Send,
+  {
+    let mut platform_view = self.inner.clone();
+    let f = s.for_each(move |i| {
+      platform_view
+        .update_prop("left_pad", Box::new(i))
+        .expect("view is there");
+      ready(())
+    });
+
+    let cancel = spawn_future(f);
+    let handle = DiscardOnDrop::leak(cancel);
+    let cleanup = Box::new(move || {
+      handle.discard();
+    });
+    // DiscardOnDrop::leak(cancel);
+    // let id = AFTER_REMOVE_CALLBACKS.with(move |r| {
+    //   let after_remove = r.borrow_mut();
+    //   // after_remove.push(cleanup);
+    //   after_remove.len()
+    // });
+
+    self.after_remove.push(cleanup);
     self
   }
 
