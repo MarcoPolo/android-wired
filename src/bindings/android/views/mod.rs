@@ -1,6 +1,6 @@
 pub mod button;
 use crate::android_executor::spawn_future;
-use crate::ui_tree::{Composable, Composer, PlatformView, PlatformViewInner};
+use crate::ui_tree::{Composable, Composer, PlatformView, PlatformViewInner, COMPOSER};
 use discard::Discard;
 use futures::future::ready;
 use futures_signals::signal::{Mutable, Signal, SignalExt};
@@ -21,6 +21,23 @@ use {
 use crate::bindings::android::callback::Callback;
 
 pub use button::Button;
+
+macro_rules! auto_compose {
+  ($e:ty) => {
+    impl Drop for $e {
+      fn drop(&mut self) {
+        COMPOSER.with(|c| {
+          let mut c = c.borrow_mut();
+          self.compose(&mut c);
+        })
+      }
+    }
+  };
+}
+
+auto_compose!(StackLayout);
+auto_compose!(Text);
+auto_compose!(Button);
 
 pub struct ViewFactory {
   inner: GlobalRef,
@@ -187,20 +204,27 @@ impl StackLayout {
     })
   }
 
-  pub fn with<F>(self, composer: &mut Composer, f: F) -> Self
+  pub fn with<F>(self, f: F) -> Self
   where
-    F: FnOnce(&mut Composer),
+    F: FnOnce(),
   {
-    let last_parent = composer.curent_parent.take();
-    composer.curent_parent = Some(self.inner);
-    f(composer);
+    let last_parent = COMPOSER.with(|composer| {
+      let mut composer = composer.borrow_mut();
+      let last_parent = composer.curent_parent.take();
+      composer.curent_parent = Some(self.inner.clone());
+      last_parent
+    });
 
-    let to_return = StackLayout {
-      inner: composer.curent_parent.take().unwrap(),
-    };
+    f();
 
-    composer.curent_parent = last_parent;
-    to_return
+    let prev_parent = COMPOSER.with(move |composer| {
+      let mut composer = composer.borrow_mut();
+      let prev_parent = composer.curent_parent.take().unwrap();
+      composer.curent_parent = last_parent;
+      prev_parent
+    });
+
+    StackLayout { inner: prev_parent }
   }
 
   pub(crate) fn get_native_view(&self) -> Result<GlobalRef, Box<dyn Error>> {
@@ -343,7 +367,7 @@ impl PlatformViewInner for WiredNativeView {
     let env = self.jvm.get_env()?;
     env.call_method(
       self.native_view.lock().unwrap().as_obj(),
-      "removeChild",
+      "removeChildIndex",
       "(I)V",
       &[JValue::Int(idx as i32)],
     )?;

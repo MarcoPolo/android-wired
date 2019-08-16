@@ -1,6 +1,7 @@
 pub mod android_executor;
 mod app;
 pub mod bindings;
+pub mod helpers;
 pub mod ui_tree;
 
 #[macro_use]
@@ -49,7 +50,6 @@ pub unsafe extern "C" fn Java_dev_fruit_androiddemo_MainActivity_hello(
     let output = env
         .new_string("Hello ".to_owned() + recipient.to_str().unwrap())
         .unwrap();
-    // info!("Hello!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 
     output.into_inner()
 }
@@ -129,8 +129,8 @@ pub unsafe extern "C" fn Java_dev_fruit_androiddemo_MainActivity_init(
         //     .new_global_ref(native_text_view.l().unwrap())
         //     .expect("Creating global ref should work");
 
-        let composer = ui_tree::Composer::new();
-        let app_root = app::main(composer);
+        // let composer = ui_tree::Composer::new();
+        let app_root = app::main();
         env.call_method(
             root_View.as_obj(),
             "appendChild",

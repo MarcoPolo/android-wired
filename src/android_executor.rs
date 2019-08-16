@@ -16,6 +16,7 @@ use {
     sync::{Arc, Mutex, MutexGuard},
     task::{Context, Poll},
     time::Duration,
+panic::{catch_unwind, RefUnwindSafe, UnwindSafe},
   },
 };
 

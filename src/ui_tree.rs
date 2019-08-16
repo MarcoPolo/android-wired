@@ -31,6 +31,8 @@ thread_local! {
       })
     });
 
+    pub static COMPOSER: RefCell<Composer> = RefCell::new(Composer::new());
+
     // static COMPOSER: RefCell<Composer> = RefCell::new(Composer::new());
 }
 
@@ -189,7 +191,7 @@ impl Text {
 
 // Keep track of where we are, should be cheap to clone
 #[derive(Clone, Debug)]
-struct PositionContext {
+pub struct PositionContext {
   children_count_stack: Vec<Mutable<usize>>,
 }
 
@@ -206,7 +208,7 @@ impl PositionContext {
     snapshot
   }
 
-  fn push_new_frame(&mut self) {
+  pub(crate) fn push_new_frame(&mut self) {
     self.children_count_stack.push(Mutable::new(0));
   }
 
@@ -229,17 +231,17 @@ impl PositionContext {
 }
 
 #[derive(Clone, Debug)]
-enum Transaction {
+pub enum Transaction {
   Add(usize),
 }
 
 #[derive(Clone)]
 pub struct Composer {
-  pub curent_parent: Option<PlatformView>,
-  position_context: PositionContext,
-  transactions: Vec<Transaction>,
-  in_transaction: bool,
-  transaction_start_idx: PositionContext,
+  pub(crate) curent_parent: Option<PlatformView>,
+  pub(crate) position_context: PositionContext,
+  pub(crate) transactions: Vec<Transaction>,
+  pub(crate) in_transaction: bool,
+  pub(crate) transaction_start_idx: PositionContext,
 }
 
 impl Composer {
@@ -253,13 +255,13 @@ impl Composer {
     }
   }
 
-  fn start_transaction(&mut self) {
+  pub(crate) fn start_transaction(&mut self) {
     self.in_transaction = true;
   }
 
-  fn rewind_transaction(&mut self) {
+  pub(crate) fn rewind_transaction(&mut self) {
     if !self.transactions.is_empty() {
-      println!(
+      debug!(
         "Trying to rewind these transactions: {:?}",
         self.transactions
       );
@@ -273,14 +275,21 @@ impl Composer {
       })
       .collect();
 
+    self.transactions = vec![];
+
     for idx in removals {
+      info!(
+        "Removing view at {} + {}",
+        self.transaction_start_idx.get_current_idx(),
+        idx
+      );
       self
         .remove_view_at(self.transaction_start_idx.get_current_idx() + idx)
         .unwrap();
     }
   }
 
-  fn end_transaction(&mut self) {
+  pub(crate) fn end_transaction(&mut self) {
     self.in_transaction = false;
   }
 
@@ -342,6 +351,7 @@ impl Composer {
       .curent_parent
       .as_mut()
       .expect("A parent is set to work on");
+    debug!("Got parent");
     if !self.transactions.is_empty() {
       self.transactions = self
         .transactions
@@ -357,6 +367,7 @@ impl Composer {
         })
         .collect();
     }
+    debug!("Calling remove child index");
     parent.remove_child_index(idx_to_remove)?;
     self.position_context.dec();
 
