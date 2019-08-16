@@ -11,6 +11,18 @@ futures-signals = "0.3.7"
 futures-preview = "=0.3.0-alpha.18"
 futures-timer = "0.3.0"
 discard = "1.0.4"
+jni = { version = "0.13.0", default-features = false }
+log = "0.4.6"
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.8"
 
 [patch.crates-io]
 futures-signals = { path = "../futures-signals" }
+
+[profile.release]
+lto = true
+
+[lib]
+name = "rust"
+crate-type = ["cdylib"]

@@ -21,7 +21,7 @@ use std::fmt::Debug;
 
 thread_local! {
     #[allow(unused)]
-    static EXECUTOR: RefCell<LocalPool> = RefCell::new(LocalPool::new());
+    pub static EXECUTOR: RefCell<LocalPool> = RefCell::new(LocalPool::new());
     static SPAWNER: RefCell<LocalSpawner> = RefCell::new({
       EXECUTOR.with(|executor| {
         let executor = executor.borrow();
@@ -682,11 +682,6 @@ mod tests {
       "StackLayout View (props = [])[\n    Text View (props = [(\"text\", \"Hello World\")]),\n    Text View (props = [(\"text\", \"It was not true\")]),\n    Text View (props = [(\"text\", \"This will only show if false\")]),\n]",
       format!("{:?}", root.underlying_view)
     );
-
-    // assert_eq!(
-    //   format!("{:?}", button.platform_view.underlying_view),
-    //   "Button View {[(\"label\", \"Counter is: 3\")]}"
-    // );
   }
 
 }
