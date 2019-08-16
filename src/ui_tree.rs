@@ -11,6 +11,7 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::mem;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures::future::ready;
@@ -37,9 +38,10 @@ pub trait Composable {
   fn compose(&mut self, composer: &mut Composer);
 }
 
+use std::sync::Mutex;
 #[derive(Clone)]
 pub struct PlatformView {
-  underlying_view: Rc<RefCell<dyn PlatformViewInner>>,
+  underlying_view: Arc<Mutex<dyn PlatformViewInner>>,
 }
 
 impl PlatformView {
@@ -48,14 +50,14 @@ impl PlatformView {
     V: PlatformViewInner + 'static,
   {
     PlatformView {
-      underlying_view: Rc::new(RefCell::new(underlying_view)),
+      underlying_view: Arc::new(Mutex::new(underlying_view)),
     }
   }
 }
 
 // pub trait Prop: Debug + Any {}
-pub trait PlatformViewInner: Debug {
-  fn update_prop(&mut self, s: &str, v: Box<dyn Any>) -> Result<(), Box<dyn Error>>;
+pub trait PlatformViewInner: Debug + Send {
+  fn update_prop(&mut self, s: &str, v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>>;
   /// If you append a child that is attached somewhere else, you should move the child.
   fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>>;
   /// Do not insert a child that is already there! undefined behavior!
@@ -64,7 +66,7 @@ pub trait PlatformViewInner: Debug {
   fn remove_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>>;
   /// Should not tear down the child (same as remove_child)
   fn remove_child_index(&mut self, idx: usize) -> Result<(), Box<dyn Error>>;
-  fn get_raw_view(&self) -> Result<&dyn Any, Box<dyn Error>>;
+  fn get_raw_view(&self) -> Result<Arc<Mutex<dyn Any>>, Box<dyn Error>>;
 }
 
 // impl Prop for String {}
@@ -391,19 +393,19 @@ impl<'a> StackLayout {
 #[derive(Clone)]
 struct DummyPlatformView {
   el_type: &'static str,
-  props: Rc<RefCell<Vec<(String, Box<dyn Any>)>>>,
+  props: Arc<Mutex<Vec<(String, Box<dyn Any + Send>)>>>,
   children: Vec<PlatformView>,
-  raw_view: Rc<dyn Any>,
+  raw_view: Arc<Mutex<dyn Any + Send>>,
 }
 
 impl DummyPlatformView {
   fn new(el_type: &'static str) -> PlatformView {
     PlatformView {
-      underlying_view: Rc::new(RefCell::new(DummyPlatformView {
+      underlying_view: Arc::new(Mutex::new(DummyPlatformView {
         el_type,
-        props: Rc::new(RefCell::new(vec![])),
+        props: Arc::new(Mutex::new(vec![])),
         children: vec![],
-        raw_view: Rc::new("dummy"),
+        raw_view: Arc::new(Mutex::new("dummy")),
       })),
     }
   }
@@ -416,7 +418,16 @@ impl Debug for DummyPlatformView {
       f,
       "{} View (props = {:?})",
       self.el_type,
-      self.props.borrow()
+      self
+        .props
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(k, v)| (
+          k.clone(),
+          v.downcast_ref::<String>().expect("Not a string").clone()
+        ))
+        .collect::<Vec<(String, String)>>()
     )?;
     if !self.children.is_empty() {
       write!(f, "{:#?}", self.children)?;
@@ -427,15 +438,15 @@ impl Debug for DummyPlatformView {
 
 impl Debug for PlatformView {
   fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-    write!(f, "{:?}", self.underlying_view.borrow())?;
+    write!(f, "{:?}", self.underlying_view.lock().unwrap())?;
     Ok(())
   }
 }
 
 impl PlatformViewInner for DummyPlatformView {
-  fn update_prop(&mut self, s: &str, v: Box<dyn Any>) -> Result<(), Box<dyn Error>> {
+  fn update_prop(&mut self, s: &str, v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
     println!("Updating {} on {:?} with {:?}", s, self, v);
-    let mut props = self.props.borrow_mut();
+    let mut props = self.props.lock().unwrap();
     if let Some(i) = props.iter().position(|(p, _)| p == s) {
       props[i] = (s.into(), v);
     } else {
@@ -463,7 +474,7 @@ impl PlatformViewInner for DummyPlatformView {
       .children
       .drain(..)
       .into_iter()
-      .filter(|v| !Rc::ptr_eq(&v.underlying_view, &c.underlying_view))
+      .filter(|v| !Arc::ptr_eq(&v.underlying_view, &c.underlying_view))
       .collect();
     Ok(())
   }
@@ -474,36 +485,41 @@ impl PlatformViewInner for DummyPlatformView {
     Ok(())
   }
 
-  fn get_raw_view(&self) -> Result<&dyn Any, Box<dyn Error>> {
-    Ok(&self.raw_view)
+  fn get_raw_view(&self) -> Result<Arc<Mutex<dyn Any>>, Box<dyn Error>> {
+    Ok(self.raw_view.clone())
   }
 }
 
 impl PlatformViewInner for PlatformView {
-  fn update_prop(&mut self, s: &str, v: Box<dyn Any>) -> Result<(), Box<dyn Error>> {
-    self.underlying_view.borrow_mut().update_prop(s, v)
+  fn update_prop(&mut self, s: &str, v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
+    self.underlying_view.lock().unwrap().update_prop(s, v)
   }
   /// If you append a child that is attached somewhere else, you should move the child.
   fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
-    self.underlying_view.borrow_mut().append_child(c)
+    self.underlying_view.lock().unwrap().append_child(c)
   }
 
   fn insert_child_at(&mut self, c: &PlatformView, idx: usize) -> Result<(), Box<dyn Error>> {
-    self.underlying_view.borrow_mut().insert_child_at(c, idx)
+    self.underlying_view.lock().unwrap().insert_child_at(c, idx)
   }
 
   /// should not tear down the child! since it may be placed somewhere else later
   fn remove_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
-    self.underlying_view.borrow_mut().remove_child(c)
+    self.underlying_view.lock().unwrap().remove_child(c)
   }
   /// Should not tear down the child (same as remove_child)
   fn remove_child_index(&mut self, idx: usize) -> Result<(), Box<dyn Error>> {
-    self.underlying_view.borrow_mut().remove_child_index(idx)
+    self.underlying_view.lock().unwrap().remove_child_index(idx)
   }
 
-  fn get_raw_view(&self) -> Result<&dyn Any, Box<dyn Error>> {
+  fn get_raw_view(&self) -> Result<Arc<Mutex<dyn Any>>, Box<dyn Error>> {
     // TODO fix
-    unsafe { (*self.underlying_view.as_ptr()).get_raw_view() }
+    let tmp = self.underlying_view.clone();
+    let underlying_view = tmp.lock().unwrap();
+    Ok(underlying_view.get_raw_view()?.clone())
+
+    // let ptr = Arc::into_raw(underlying_view);
+    // unsafe { (*ptr).lock().unwrap().get_raw_view() }
   }
 }
 
@@ -629,8 +645,8 @@ mod tests {
 
     assert_eq!(*my_state.lock_ref(), 3);
     assert_eq!(
-      format!("{:?}", button.platform_view.underlying_view),
-      "Button View {[(\"label\", \"Counter is: 3\")]}"
+      format!("{:?}", button.platform_view.underlying_view.lock().unwrap()),
+      "Button View (props = [(\"label\", \"Counter is: 3\")])"
     );
   }
 

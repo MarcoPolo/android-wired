@@ -135,7 +135,7 @@ pub unsafe extern "C" fn Java_dev_fruit_androiddemo_MainActivity_init(
             root_View.as_obj(),
             "appendChild",
             "(Ldev/fruit/androiddemo/WiredPlatformView;)V",
-            &[JValue::Object(app_root.get_native_view().as_obj())],
+            &[JValue::Object(app_root.get_native_view().unwrap().as_obj())],
         )
         .unwrap();
 

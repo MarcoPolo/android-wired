@@ -276,6 +276,7 @@ class AppState(val context: Context, val rootViewGroup: ViewGroup) {
 interface WiredPlatformView {
     fun updateProp(k: String, v: Any)
     fun updateProp(k: String, v: Float)
+    fun updateProp(k: String, v: RustCallback)
     fun appendChild(child: WiredPlatformView) {
         addView(child as View)
     }
@@ -322,9 +323,25 @@ class WiredTextView(val mContext: Context): TextView(mContext), WiredPlatformVie
             "text_size" -> textSize = v as Float
         }
     }
+
+    override fun updateProp(k: String, v: RustCallback) {
+        when (k) {
+            "on_press" -> {
+                Log.d("Demo", "REGISTERED ON_PRESS for text")
+                setOnClickListener {
+                    Log.d("Demo", "You've pressed it!")
+                    (v as RustCallback).call(v)
+                }
+            }
+        }
+    }
 }
 
 class WiredLinearLayout(val mContext: Context): LinearLayout(mContext), WiredPlatformView {
+    override fun updateProp(k: String, v: RustCallback) {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
     override fun updateProp(k: String, v: Float) {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
@@ -334,11 +351,65 @@ class WiredLinearLayout(val mContext: Context): LinearLayout(mContext), WiredPla
     }
 }
 
+class RustCallback {
+    val ptr: Long = 0
+    external fun call(rustCallback: RustCallback)
+}
+
+class WiredButton(mContext: Context): Button(mContext), WiredPlatformView {
+    override fun updateProp(k: String, v: RustCallback) {
+        when (k) {
+            "on_press" -> {
+                Log.d("Demo", "REGISTERED ON_PRESS")
+                setOnClickListener {
+                    Log.d("Demo", "You've pressed it!")
+                    (v as RustCallback).call(v)
+                }
+            }
+            else -> {
+                TODO("not implemented $k") //To change body of created functions use File | Settings | File Templates.
+            }
+        }
+    }
+
+    override fun updateProp(k: String, v: Any) {
+        when (k) {
+            "text" ->  text = v as String
+        }
+    }
+
+    override fun updateProp(k: String, v: Float) {
+        when (k) {
+            "text_size" -> textSize = v as Float
+        }
+    }
+
+    override fun addView(child: View) {
+        throw Error("Undefined")
+    }
+
+    override fun addView(child: View, idx: Int) {
+        throw Error("Undefined")
+    }
+
+    override fun removeView(child: View) {
+        throw Error("Undefined")
+    }
+
+    override fun removeViewAt(idx: Int) {
+        throw Error("Undefined")
+    }
+}
 
 
 class WiredViewFactory(val mContext: Context) {
     fun createTextView(): WiredPlatformView {
         return WiredTextView(mContext)
+    }
+    fun createBtnView(): WiredPlatformView {
+        val b =  WiredButton(mContext)
+        b.text = "BUTTON"
+        return b
     }
     fun createStackLayoutView(): WiredPlatformView {
         val l = WiredLinearLayout(mContext)
