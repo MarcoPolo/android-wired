@@ -15,7 +15,7 @@ enum Slide {
   Two,
 }
 
-pub fn main() -> StackLayout {
+pub fn main() {
   let slide_number: Mutable<Slide> = Mutable::new(Slide::One);
   let slide_sig = slide_number.signal();
 
@@ -38,9 +38,11 @@ pub fn main() -> StackLayout {
         Text::new("Hello Slide 2").size(32.0);
       }
     });
-    Button::new(on_prev).label("Previous");
-    Button::new(on_next).label("Next");
-  })
+    // StackLayout::new().with(move || {
+    //   Button::new(on_prev).label("Previous");
+    // });
+    // Button::new(on_next).label("Next");
+  });
 }
 
 impl Slide {

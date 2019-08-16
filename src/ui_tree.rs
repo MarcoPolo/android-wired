@@ -195,6 +195,13 @@ pub struct PositionContext {
   children_count_stack: Vec<Mutable<usize>>,
 }
 
+pub fn set_root_view(view: PlatformView) {
+  COMPOSER.with(|c| {
+    let mut composer = c.borrow_mut();
+    composer.curent_parent.replace(view);
+  })
+}
+
 impl PositionContext {
   fn new() -> PositionContext {
     PositionContext {

@@ -45,11 +45,8 @@ pub struct ViewFactory {
 }
 
 impl ViewFactory {
-  pub fn new(inner: GlobalRef, jvm: JavaVM) -> Self {
-    ViewFactory {
-      inner,
-      jvm: Arc::new(jvm),
-    }
+  pub fn new(inner: GlobalRef, jvm: Arc<JavaVM>) -> Self {
+    ViewFactory { inner, jvm }
   }
 }
 
@@ -62,7 +59,7 @@ pub struct Text {
   after_remove: Vec<Box<FnOnce()>>,
 }
 
-fn wrap_native_view(g: GlobalRef) -> Arc<Mutex<GlobalRef>> {
+pub(crate) fn wrap_native_view(g: GlobalRef) -> Arc<Mutex<GlobalRef>> {
   Arc::new(Mutex::new(g))
 }
 
@@ -222,6 +219,7 @@ impl Composable for Text {
 
 impl Composable for StackLayout {
   fn compose(&mut self, composer: &mut Composer) {
+    info!("Composing stack layout");
     composer
       .add_view(&mut self.inner)
       .expect("Couldn't add view");
@@ -229,7 +227,7 @@ impl Composable for StackLayout {
 }
 
 pub struct StackLayout {
-  inner: PlatformView,
+  pub(crate) inner: PlatformView,
 }
 
 impl Default for StackLayout {
@@ -252,38 +250,52 @@ impl StackLayout {
           &[],
         )
         .unwrap();
-      let underlying_view = WiredNativeView {
-        kind: "StackLayout",
-        jvm: view_factory.jvm.clone(),
-        native_view: wrap_native_view(env.new_global_ref(native_view.l().unwrap()).unwrap()),
-      };
-      StackLayout {
-        inner: PlatformView::new(underlying_view),
-      }
+      StackLayout::new_from_native_view(
+        view_factory.jvm.clone(),
+        env.new_global_ref(native_view.l().unwrap()).unwrap(),
+      )
     })
   }
 
-  pub fn with<F>(self, f: F) -> Self
+  pub fn new_from_native_view(jvm: Arc<JavaVM>, n: GlobalRef) -> Self {
+    let underlying_view = WiredNativeView {
+      kind: "StackLayout",
+      jvm,
+      native_view: wrap_native_view(n),
+    };
+    StackLayout {
+      inner: PlatformView::new(underlying_view),
+    }
+  }
+
+  pub fn with<F>(mut self, f: F) -> Self
   where
     F: FnOnce(),
   {
-    let last_parent = COMPOSER.with(|composer| {
+    // let last_parent = COMPOSER.with(|composer| {
+    COMPOSER.with(|composer| {
       let mut composer = composer.borrow_mut();
-      let last_parent = composer.curent_parent.take();
-      composer.curent_parent = Some(self.inner.clone());
-      last_parent
+      std::mem::swap(&mut self.inner, composer.curent_parent.as_mut().unwrap());
+      // composer.curent_parent.replace(self.inner)
+      // composer.curent_parent = Some(self.inner.clone());
+      // last_parent
     });
 
     f();
 
-    let prev_parent = COMPOSER.with(move |composer| {
+    // let my_view = COMPOSER.with(move |composer| {
+    COMPOSER.with(|composer| {
       let mut composer = composer.borrow_mut();
-      let prev_parent = composer.curent_parent.take().unwrap();
-      composer.curent_parent = last_parent;
-      prev_parent
+      // let my_view = composer.curent_parent.take().expect("I should get myself back");
+      std::mem::swap(&mut self.inner, composer.curent_parent.as_mut().unwrap());
+      // composer.curent_parent = last_parent;
+      // my_view
+
+      // composer.curent_parent = last_parent;
+      // prev_parent
     });
 
-    StackLayout { inner: prev_parent }
+    self
   }
 
   pub(crate) fn get_native_view(&self) -> Result<GlobalRef, Box<dyn Error>> {
@@ -297,10 +309,10 @@ impl StackLayout {
   }
 }
 
-struct WiredNativeView {
-  kind: &'static str,
-  jvm: Arc<JavaVM>,
-  native_view: Arc<Mutex<GlobalRef>>,
+pub struct WiredNativeView {
+  pub kind: &'static str,
+  pub jvm: Arc<JavaVM>,
+  pub native_view: Arc<Mutex<GlobalRef>>,
 }
 
 impl fmt::Debug for WiredNativeView {
