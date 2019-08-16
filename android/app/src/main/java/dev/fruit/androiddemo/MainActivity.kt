@@ -275,27 +275,40 @@ class AppState(val context: Context, val rootViewGroup: ViewGroup) {
 
 interface WiredPlatformView {
     fun updateProp(k: String, v: Any)
-    fun appendChild(child: WiredPlatformView)
-    fun removeChild(child: WiredPlatformView)
-    fun removeChildIndex(idx: Int)
-    fun insertChildAt(child: WiredPlatformView, idx: Int)
+    fun updateProp(k: String, v: Float)
+    fun appendChild(child: WiredPlatformView) {
+        addView(child as View)
+    }
+    fun removeChild(child: WiredPlatformView) {
+        removeView(child as View)
+    }
+    fun removeChildIndex(idx: Int) {
+        removeViewAt(idx)
+    }
+    fun insertChildAt(child: WiredPlatformView, idx: Int) {
+        addView(child as View, idx)
+    }
+    fun addView(child: View)
+    fun addView(child: View, idx: Int)
+    fun removeView(child: View)
+    fun removeViewAt(idx: Int)
 }
 
 class WiredTextView(val mContext: Context): TextView(mContext), WiredPlatformView {
-    override fun appendChild(child: WiredPlatformView) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    override fun addView(child: View) {
+        throw Error("Undefined")
     }
 
-    override fun removeChild(child: WiredPlatformView) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    override fun addView(child: View, idx: Int) {
+        throw Error("Undefined")
     }
 
-    override fun removeChildIndex(idx: Int) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    override fun removeView(child: View) {
+        throw Error("Undefined")
     }
 
-    override fun insertChildAt(child: WiredPlatformView, idx: Int) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    override fun removeViewAt(idx: Int) {
+        throw Error("Undefined")
     }
 
     override fun updateProp(k: String, v: Any) {
@@ -304,7 +317,7 @@ class WiredTextView(val mContext: Context): TextView(mContext), WiredPlatformVie
         }
     }
 
-    fun updateProp(k: String, v: Float) {
+    override fun updateProp(k: String, v: Float) {
         when (k) {
             "text_size" -> textSize = v as Float
         }
@@ -312,23 +325,11 @@ class WiredTextView(val mContext: Context): TextView(mContext), WiredPlatformVie
 }
 
 class WiredLinearLayout(val mContext: Context): LinearLayout(mContext), WiredPlatformView {
+    override fun updateProp(k: String, v: Float) {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
     override fun updateProp(k: String, v: Any) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-
-    override fun appendChild(child: WiredPlatformView) {
-        addView(child as View)
-    }
-
-    override fun removeChild(child: WiredPlatformView) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-
-    override fun removeChildIndex(idx: Int) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-
-    override fun insertChildAt(child: WiredPlatformView, idx: Int) {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
 }
@@ -338,6 +339,11 @@ class WiredLinearLayout(val mContext: Context): LinearLayout(mContext), WiredPla
 class WiredViewFactory(val mContext: Context) {
     fun createTextView(): WiredPlatformView {
         return WiredTextView(mContext)
+    }
+    fun createStackLayoutView(): WiredPlatformView {
+        val l = WiredLinearLayout(mContext)
+        l.orientation = LinearLayout.VERTICAL
+        return l
     }
 }
 

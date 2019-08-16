@@ -1,4 +1,5 @@
 pub mod android_executor;
+mod app;
 pub mod bindings;
 pub mod ui_tree;
 
@@ -8,6 +9,9 @@ extern crate log;
 extern crate android_logger;
 #[cfg(target_os = "android")]
 use android_logger::Config;
+
+#[cfg(target_os = "android")]
+use bindings::android::views;
 
 use discard::DiscardOnDrop;
 use futures_signals::signal::{Mutable, Signal, SignalExt};
@@ -74,91 +78,106 @@ pub unsafe extern "C" fn Java_dev_fruit_androiddemo_MainActivity_init(
             .new_global_ref(root_view)
             .expect("Creating global ref should work");
 
-        info!("Grabbing text view");
-        let native_text_view = env
-            .call_method(
-                view_factory.as_obj(),
-                "createTextView",
-                "()Ldev/fruit/androiddemo/WiredPlatformView;",
-                &[],
-            )
-            .unwrap();
+        // info!("Grabbing text view");
+        // let native_text_view = env
+        //     .call_method(
+        //         view_factory.as_obj(),
+        //         "createTextView",
+        //         "()Ldev/fruit/androiddemo/WiredPlatformView;",
+        //         &[],
+        //     )
+        //     .unwrap();
 
-        env.call_method(
-            native_text_view.l().unwrap(),
-            "updateProp",
-            "(Ljava/lang/String;Ljava/lang/Object;)V",
-            &[
-                JValue::Object(env.new_string("text").unwrap().into()),
-                JValue::Object(env.new_string("Hello World").unwrap().into()),
-            ],
-        )
-        .unwrap();
+        let jvm = env.get_java_vm().unwrap();
+        views::VIEWFACTORY.with(move |view_factory_ref| {
+            *view_factory_ref.borrow_mut() = Some(views::ViewFactory::new(view_factory, jvm));
+        });
 
-        env.call_method(
-            native_text_view.l().unwrap(),
-            "updateProp",
-            "(Ljava/lang/String;F)V",
-            &[
-                JValue::Object(env.new_string("text_size").unwrap().into()),
-                JValue::Float(25.0),
-            ],
-        )
-        .unwrap();
+        // env.call_method(
+        //     native_text_view.l().unwrap(),
+        //     "updateProp",
+        //     "(Ljava/lang/String;Ljava/lang/Object;)V",
+        //     &[
+        //         JValue::Object(env.new_string("text").unwrap().into()),
+        //         JValue::Object(env.new_string("Hello World").unwrap().into()),
+        //     ],
+        // )
+        // .unwrap();
 
-        info!("got text view!");
+        // env.call_method(
+        //     native_text_view.l().unwrap(),
+        //     "updateProp",
+        //     "(Ljava/lang/String;F)V",
+        //     &[
+        //         JValue::Object(env.new_string("text_size").unwrap().into()),
+        //         JValue::Float(25.0),
+        //     ],
+        // )
+        // .unwrap();
 
+        // info!("got text view!");
+
+        // env.call_method(
+        //     root_View.as_obj(),
+        //     "appendChild",
+        //     "(Ldev/fruit/androiddemo/WiredPlatformView;)V",
+        //     &[native_text_view],
+        // )
+        // .unwrap();
+
+        // let native_text_view = env
+        //     .new_global_ref(native_text_view.l().unwrap())
+        //     .expect("Creating global ref should work");
+
+        let composer = ui_tree::Composer::new();
+        let app_root = app::main(composer);
         env.call_method(
             root_View.as_obj(),
             "appendChild",
             "(Ldev/fruit/androiddemo/WiredPlatformView;)V",
-            &[native_text_view],
+            &[JValue::Object(app_root.get_native_view().as_obj())],
         )
         .unwrap();
 
-        let native_text_view = env
-            .new_global_ref(native_text_view.l().unwrap())
-            .expect("Creating global ref should work");
+        // let javavm = env.get_java_vm().unwrap();
+        // let idx = Mutable::new(0);
+        // let f = Interval::new(Duration::from_secs(1))
+        //     .take(5)
+        //     .for_each(move |_| {
+        //         info!("Calling update prop here");
+        //         let local_env = javavm.get_env().unwrap();
+        //         {
+        //             let mut lock = idx.lock_mut();
+        //             *lock += 1;
+        //         }
+        //         let i = 0;
+        //         local_env
+        //             .call_method(
+        //                 native_text_view.as_obj(),
+        //                 "updateProp",
+        //                 "(Ljava/lang/String;Ljava/lang/Object;)V",
+        //                 &[
+        //                     JValue::Object(local_env.new_string("text").unwrap().into()),
+        //                     JValue::Object(
+        //                         local_env
+        //                             .new_string(format!("Hello World: {:?}", *idx.lock_ref()))
+        //                             .unwrap()
+        //                             .into(),
+        //                     ),
+        //                 ],
+        //             )
+        //             .unwrap();
+        //         ready(())
+        //     });
 
-        let javavm = env.get_java_vm().unwrap();
-        let idx = Mutable::new(0);
-        let f = Interval::new(Duration::from_secs(1))
-            .take(5)
-            .for_each(move |_| {
-                info!("Calling update prop here");
-                let local_env = javavm.get_env().unwrap();
-                {
-                    let mut lock = idx.lock_mut();
-                    *lock += 1;
-                }
-                let i = 0;
-                local_env
-                    .call_method(
-                        native_text_view.as_obj(),
-                        "updateProp",
-                        "(Ljava/lang/String;Ljava/lang/Object;)V",
-                        &[
-                            JValue::Object(local_env.new_string("text").unwrap().into()),
-                            JValue::Object(
-                                local_env
-                                    .new_string(format!("Hello World: {:?}", *idx.lock_ref()))
-                                    .unwrap()
-                                    .into(),
-                            ),
-                        ],
-                    )
-                    .unwrap();
-                ready(())
-            });
-
-        DiscardOnDrop::leak(spawn_future(f));
+        // DiscardOnDrop::leak(spawn_future(f));
     });
 
     match result {
         Err(cause) => {
             info!("I failed");
             if let Some(reason) = cause.downcast_ref::<Box<dyn Error>>() {
-                info!("Failed because err {}", reason);
+                info!("Failed because err: {}", reason);
             }
             if let Some(reason) = cause.downcast_ref::<std::cell::BorrowError>() {
                 info!("Failed because borrow err {}", reason);
@@ -167,7 +186,7 @@ pub unsafe extern "C" fn Java_dev_fruit_androiddemo_MainActivity_init(
                 info!("Failed because borrow mut err {}", reason);
             }
             if let Some(reason) = cause.downcast_ref::<String>() {
-                info!("Failed because str {}", reason);
+                info!("Failed because str: {}", reason);
             }
             if let Some(reason) = cause.downcast_ref::<Box<dyn Display>>() {
                 info!("Failed because {}", reason);

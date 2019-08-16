@@ -20,8 +20,6 @@ use {
 };
 
 thread_local! {
-    #[allow(unused)]
-    static EXECUTOR: RefCell<Option<AndroidExecutor>> = RefCell::new(None);
     static SPAWNER: RefCell<Option<Spawner>> = RefCell::new(None);
 }
 
@@ -84,6 +82,8 @@ pub unsafe extern "C" fn Java_dev_fruit_androiddemo_Executor_recv(
   if let Ok(task) = executor.ready_queue.recv() {
     info!("Got task!");
     executor.staging_task = Mutex::new(Some(task));
+  } else {
+    panic!("Bail")
   }
 }
 

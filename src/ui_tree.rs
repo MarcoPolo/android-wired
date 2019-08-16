@@ -7,6 +7,7 @@ use futures::prelude::*;
 use futures::task::LocalSpawnExt;
 use futures_signals::{cancelable_future, CancelableFutureHandle};
 use futures_timer::{Delay, Interval};
+use std::any::Any;
 use std::cell::RefCell;
 use std::mem;
 use std::rc::Rc;
@@ -15,7 +16,6 @@ use std::time::Duration;
 use futures::future::ready;
 use futures_signals::signal::{Mutable, Signal, SignalExt};
 use futures_signals::signal_vec::{MutableVec, SignalVecExt};
-use std::any::Any;
 use std::error::Error;
 use std::fmt::Debug;
 
@@ -33,19 +33,29 @@ thread_local! {
     // static COMPOSER: RefCell<Composer> = RefCell::new(Composer::new());
 }
 
-trait Composable {
+pub trait Composable {
   fn compose(&mut self, composer: &mut Composer);
 }
 
 #[derive(Clone)]
-struct PlatformView {
+pub struct PlatformView {
   underlying_view: Rc<RefCell<dyn PlatformViewInner>>,
-  is_node: bool,
 }
 
-trait Prop: Debug + Any {}
-trait PlatformViewInner: Debug {
-  fn update_prop(&mut self, s: &str, v: Box<dyn Prop>) -> Result<(), Box<dyn Error>>;
+impl PlatformView {
+  pub fn new<V>(underlying_view: V) -> Self
+  where
+    V: PlatformViewInner + 'static,
+  {
+    PlatformView {
+      underlying_view: Rc::new(RefCell::new(underlying_view)),
+    }
+  }
+}
+
+// pub trait Prop: Debug + Any {}
+pub trait PlatformViewInner: Debug {
+  fn update_prop(&mut self, s: &str, v: Box<dyn Any>) -> Result<(), Box<dyn Error>>;
   /// If you append a child that is attached somewhere else, you should move the child.
   fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>>;
   /// Do not insert a child that is already there! undefined behavior!
@@ -54,9 +64,11 @@ trait PlatformViewInner: Debug {
   fn remove_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>>;
   /// Should not tear down the child (same as remove_child)
   fn remove_child_index(&mut self, idx: usize) -> Result<(), Box<dyn Error>>;
+  fn get_raw_view(&self) -> Result<&dyn Any, Box<dyn Error>>;
 }
 
-impl Prop for String {}
+// impl Prop for String {}
+// impl Prop for f32 {}
 
 fn spawn_local<F>(future: F)
 where
@@ -220,8 +232,8 @@ enum Transaction {
 }
 
 #[derive(Clone)]
-struct Composer {
-  curent_parent: Option<PlatformView>,
+pub struct Composer {
+  pub curent_parent: Option<PlatformView>,
   position_context: PositionContext,
   transactions: Vec<Transaction>,
   in_transaction: bool,
@@ -229,7 +241,7 @@ struct Composer {
 }
 
 impl Composer {
-  fn new() -> Composer {
+  pub fn new() -> Composer {
     Composer {
       curent_parent: None,
       position_context: PositionContext::new(),
@@ -287,7 +299,7 @@ impl Composer {
   //   }
   // }
 
-  fn add_view(&mut self, view: &mut PlatformView) -> Result<(), Box<dyn Error>> {
+  pub fn add_view(&mut self, view: &mut PlatformView) -> Result<(), Box<dyn Error>> {
     if let Some(mut curent_parent) = self.curent_parent.take() {
       let res = if self.in_transaction {
         curent_parent.insert_child_at(view, self.position_context.get_current_idx())
@@ -357,7 +369,6 @@ struct StackLayout {
 impl<'a> StackLayout {
   fn new() -> Self {
     let mut underlying_view = DummyPlatformView::new("StackLayout");
-    underlying_view.is_node = true;
     StackLayout { underlying_view }
   }
   fn with<F>(self, composer: &mut Composer, f: F) -> Self
@@ -380,8 +391,9 @@ impl<'a> StackLayout {
 #[derive(Clone)]
 struct DummyPlatformView {
   el_type: &'static str,
-  props: Rc<RefCell<Vec<(String, Box<dyn Prop>)>>>,
+  props: Rc<RefCell<Vec<(String, Box<dyn Any>)>>>,
   children: Vec<PlatformView>,
+  raw_view: Rc<dyn Any>,
 }
 
 impl DummyPlatformView {
@@ -391,8 +403,8 @@ impl DummyPlatformView {
         el_type,
         props: Rc::new(RefCell::new(vec![])),
         children: vec![],
+        raw_view: Rc::new("dummy"),
       })),
-      is_node: false,
     }
   }
 }
@@ -421,7 +433,7 @@ impl Debug for PlatformView {
 }
 
 impl PlatformViewInner for DummyPlatformView {
-  fn update_prop(&mut self, s: &str, v: Box<dyn Prop>) -> Result<(), Box<dyn Error>> {
+  fn update_prop(&mut self, s: &str, v: Box<dyn Any>) -> Result<(), Box<dyn Error>> {
     println!("Updating {} on {:?} with {:?}", s, self, v);
     let mut props = self.props.borrow_mut();
     if let Some(i) = props.iter().position(|(p, _)| p == s) {
@@ -461,10 +473,14 @@ impl PlatformViewInner for DummyPlatformView {
     self.children.remove(idx);
     Ok(())
   }
+
+  fn get_raw_view(&self) -> Result<&dyn Any, Box<dyn Error>> {
+    Ok(&self.raw_view)
+  }
 }
 
 impl PlatformViewInner for PlatformView {
-  fn update_prop(&mut self, s: &str, v: Box<dyn Prop>) -> Result<(), Box<dyn Error>> {
+  fn update_prop(&mut self, s: &str, v: Box<dyn Any>) -> Result<(), Box<dyn Error>> {
     self.underlying_view.borrow_mut().update_prop(s, v)
   }
   /// If you append a child that is attached somewhere else, you should move the child.
@@ -483,6 +499,11 @@ impl PlatformViewInner for PlatformView {
   /// Should not tear down the child (same as remove_child)
   fn remove_child_index(&mut self, idx: usize) -> Result<(), Box<dyn Error>> {
     self.underlying_view.borrow_mut().remove_child_index(idx)
+  }
+
+  fn get_raw_view(&self) -> Result<&dyn Any, Box<dyn Error>> {
+    // TODO fix
+    unsafe { (*self.underlying_view.as_ptr()).get_raw_view() }
   }
 }
 
