@@ -6,11 +6,13 @@ import android.content.Intent
 import android.os.*
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import org.jetbrains.anko.Orientation
 import org.jetbrains.anko.doAsync
 import org.jetbrains.anko.uiThread
 import java.io.File
@@ -350,7 +352,12 @@ class WiredLinearLayout(val mContext: Context): LinearLayout(mContext), WiredPla
     }
 
     override fun updateProp(k: String, v: Any) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        when (k) {
+            "orientation" ->  when(v as String) {
+                "Vertical" -> orientation = LinearLayout.VERTICAL
+                "Horizontal" -> orientation = LinearLayout.HORIZONTAL
+            }
+        }
     }
 }
 
@@ -412,10 +419,16 @@ class WiredViewFactory(val mContext: Context) {
     fun createBtnView(): WiredPlatformView {
         val b =  WiredButton(mContext)
         b.text = "BUTTON"
+        b.layoutParams =
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         return b
     }
     fun createStackLayoutView(): WiredPlatformView {
         val l = WiredLinearLayout(mContext)
+        l.gravity = Gravity.CENTER
         l.orientation = LinearLayout.VERTICAL
         return l
     }

@@ -2,6 +2,7 @@ pub mod android_executor;
 mod app;
 pub mod bindings;
 pub mod helpers;
+pub mod style;
 pub mod ui_tree;
 
 mod slides;

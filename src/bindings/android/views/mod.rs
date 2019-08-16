@@ -1,5 +1,6 @@
 pub mod button;
 use crate::android_executor::spawn_future;
+use crate::style;
 use crate::ui_tree::{Composable, Composer, PlatformView, PlatformViewInner, COMPOSER};
 use discard::Discard;
 use futures::future::ready;
@@ -266,6 +267,16 @@ impl StackLayout {
     StackLayout {
       inner: PlatformView::new(underlying_view),
     }
+  }
+
+  pub fn orientation(mut self, o: style::Orientation) -> Self {
+    let string: String = o.to_string();
+    info!("UPDATING ORIENTATION!!!");
+    self
+      .inner
+      .update_prop("orientation", Box::new(string))
+      .expect("Couldn't update orientation");
+    self
   }
 
   pub fn with<F>(mut self, f: F) -> Self

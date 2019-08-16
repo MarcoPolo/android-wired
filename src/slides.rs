@@ -2,6 +2,7 @@
 use crate::android_executor::spawn_future;
 use crate::bindings::android::views::{Button, StackLayout, Text};
 use crate::helpers::{if_signal, match_signal};
+use crate::style::Orientation;
 use discard::DiscardOnDrop;
 use futures::future::ready;
 use futures::prelude::*;
@@ -38,10 +39,12 @@ pub fn main() {
         Text::new("Hello Slide 2").size(32.0);
       }
     });
-    // StackLayout::new().with(move || {
-    //   Button::new(on_prev).label("Previous");
-    // });
-    // Button::new(on_next).label("Next");
+    StackLayout::new()
+      .with(move || {
+        Button::new(on_prev).label("Previous");
+        Button::new(on_next).label("Next");
+      })
+      .orientation(Orientation::Horizontal);
   });
 }
 
