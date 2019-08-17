@@ -267,6 +267,25 @@ impl StackLayout {
     })
   }
 
+    pub fn height(mut self, f: f32) -> Self {
+    info!("UPDATING Height!!!");
+    self
+      .inner
+      .update_prop("height", Box::new(f))
+      .expect("Couldn't update");
+    self
+  }
+
+  pub fn width(mut self, f: f32) -> Self {
+    info!("UPDATING width!!");
+    self
+      .inner
+      .update_prop("width", Box::new(f))
+      .expect("Couldn't update");
+    self
+  }
+
+
   pub fn new_from_native_view(jvm: Arc<JavaVM>, n: GlobalRef) -> Self {
     let underlying_view = WiredNativeView {
       kind: "StackLayout",

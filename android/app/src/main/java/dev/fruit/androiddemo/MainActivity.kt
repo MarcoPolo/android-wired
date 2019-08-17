@@ -471,6 +471,7 @@ class WiredViewFactory(val mContext: Context) {
     }
     fun createStackLayoutView(): WiredPlatformView {
         val l = WiredLinearLayout(mContext)
+        l.layoutParams = ViewGroup.LayoutParams(500, 500)
         l.gravity = Gravity.CENTER
         l.orientation = LinearLayout.VERTICAL
         return l

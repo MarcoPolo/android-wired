@@ -10,25 +10,6 @@ use futures_signals::signal::{Mutable, Signal, SignalExt};
 use futures_timer::{Delay, Interval};
 use std::time::Duration;
 
-#[derive(Copy, Clone)]
-enum Slide {
-  One,
-  Two,
-}
-
-fn expand_slides(info: BasicSlideInfo) -> Vec<BasicSlideInfo> {
-  return vec![info];
-  let title = info.title;
-  let mut out = vec![];
-  for i in 0..info.reasons.len() {
-    out.push(BasicSlideInfo {
-      title,
-      reasons: info.reasons[0..i].into(),
-    })
-  }
-  out
-}
-
 fn build_slides() -> Vec<BasicSlideInfo> {
   (vec![
     expand_slides(BasicSlideInfo {
@@ -74,38 +55,35 @@ pub fn main() {
     }
   };
 
-  StackLayout::new()
+  PhysicsLayout::new()
     .with(move || {
       match_signal(slide_sig, move |slide_idx| {
-        // StackLayout::new().with(|| {
-        // BasicSlide(&slides[(slide_idx % slides.len())]);
-        let info = &slides[(slide_idx % slides.len())];
-        Text::new(info.title)
-          .size(32.0)
-          .pad_left(20.0)
-          .pad_top(20.0);
-        for reason in info.reasons.iter() {
-          Text::new(*reason).size(20.0).pad_top(20.0).pad_left(20.0);
-        }
+        BasicSlide(&slides[(slide_idx % slides.len())]);
       });
-      // });
       StackLayout::new()
         .with(|| {
           Button::new(on_prev).label("Previous");
           Button::new(on_next).label("Next");
         })
         .orientation(Orientation::Horizontal);
-      // .set_x(300.0)
-      // .set_y(400.0);
     })
-    .orientation(Orientation::Vertical);
-  // .height(1820.0)
-  // .width(1080.0);
+    .orientation(Orientation::Vertical)
+    .height(1820.0)
+    .width(1080.0);
 }
 
-struct BasicSlideInfo {
-  title: &'static str,
-  reasons: Vec<&'static str>,
+// UTIL
+
+fn expand_slides(info: BasicSlideInfo) -> Vec<BasicSlideInfo> {
+  let title = info.title;
+  let mut out = vec![];
+  for i in 0..info.reasons.len() {
+    out.push(BasicSlideInfo {
+      title,
+      reasons: info.reasons[0..i].into(),
+    })
+  }
+  out
 }
 
 fn BasicSlide(info: &BasicSlideInfo) {
@@ -118,17 +96,7 @@ fn BasicSlide(info: &BasicSlideInfo) {
   }
 }
 
-impl Slide {
-  fn next(self) -> Slide {
-    match self {
-      Slide::One => Slide::Two,
-      Slide::Two => Slide::Two,
-    }
-  }
-  fn prev(self) -> Slide {
-    match self {
-      Slide::One => Slide::One,
-      Slide::Two => Slide::One,
-    }
-  }
+struct BasicSlideInfo {
+  title: &'static str,
+  reasons: Vec<&'static str>,
 }

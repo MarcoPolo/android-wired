@@ -8,7 +8,7 @@ use std::borrow::BorrowMut;
 pub fn if_signal<S, F>(s: S, mut f: F)
 where
   S: Signal<Item = bool> + Send + 'static,
-  F: FnMut(bool) + Send + 'static,
+  F: Fn(bool) + Send + 'static,
 {
   match_signal(s, f);
 }
@@ -16,7 +16,7 @@ where
 pub fn match_signal<S, F, M>(s: S, mut f: F)
 where
   S: Signal<Item = M> + Send + 'static,
-  F: FnMut(M) + Send + 'static,
+  F: Fn(M) + Send + 'static,
   M: 'static,
 {
   let mut current_composer_context: Composer = COMPOSER.with(|c| {
