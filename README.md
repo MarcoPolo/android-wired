@@ -1,5 +1,67 @@
 # Wired
 
+## Sample - Hello World
+
+```rust
+fn HelloWorld() {
+  Text::new(Hello World)
+}
+```
+
+## Sample - Presentation Slides
+
+```rust
+struct BasicSlideInfo {
+  title: &'static str,
+  reasons: Vec<&'static str>,
+}
+
+pub fn main() {
+  let slide_number: Mutable<usize> = Mutable::new(0);
+  let slide_sig = slide_number.signal();
+  let slides: Vec<BasicSlideInfo> = build_slides();
+
+  // Necesarry since we move this in the closures below
+  let slide_number_clone = slide_number.clone();
+  let on_next = move || {
+    let mut lock = slide_number_clone.lock_mut();
+    *lock += 1;
+  };
+  let on_prev = move || {
+    let mut lock = slide_number.lock_mut();
+    if *lock > 0 {
+      *lock -= 1;
+    }
+  };
+
+  PhysicsLayout::new()
+    .with(move || {
+      match_signal(slide_sig, move |slide_idx| {
+        BasicSlide(&slides[(slide_idx % slides.len())]);
+      });
+      StackLayout::new()
+        .with(|| {
+          Button::new(on_prev).label("Previous");
+          Button::new(on_next).label("Next");
+        })
+        .orientation(Orientation::Horizontal);
+    })
+    .orientation(Orientation::Vertical)
+    .height(1820.0)
+    .width(1080.0);
+}
+
+fn BasicSlide(info: &BasicSlideInfo) {
+  Text::new(info.title)
+    .size(32.0)
+    .pad_left(20.0)
+    .pad_top(20.0);
+  for reason in info.reasons.iter() {
+    Text::new(*reason).size(20.0).pad_top(20.0).pad_left(20.0);
+  }
+}
+```
+
 ### Setup (For cross platform)
 
 [Source](https://medium.com/visly/rust-on-android-19f34a2fb43)

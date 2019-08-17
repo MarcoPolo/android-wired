@@ -72,6 +72,16 @@ pub fn main() {
     .width(1080.0);
 }
 
+fn BasicSlide(info: &BasicSlideInfo) {
+  Text::new(info.title)
+    .size(32.0)
+    .pad_left(20.0)
+    .pad_top(20.0);
+  for reason in info.reasons.iter() {
+    Text::new(*reason).size(20.0).pad_top(20.0).pad_left(20.0);
+  }
+}
+
 // UTIL
 
 fn expand_slides(info: BasicSlideInfo) -> Vec<BasicSlideInfo> {
@@ -84,16 +94,6 @@ fn expand_slides(info: BasicSlideInfo) -> Vec<BasicSlideInfo> {
     })
   }
   out
-}
-
-fn BasicSlide(info: &BasicSlideInfo) {
-  Text::new(info.title)
-    .size(32.0)
-    .pad_left(20.0)
-    .pad_top(20.0);
-  for reason in info.reasons.iter() {
-    Text::new(*reason).size(20.0).pad_top(20.0).pad_left(20.0);
-  }
 }
 
 struct BasicSlideInfo {
