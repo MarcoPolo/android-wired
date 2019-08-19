@@ -21,7 +21,7 @@ pub fn main() {
   let slide_sig = slide_number.signal();
   let slides: Vec<BasicSlideInfo> = build_slides();
 
-  // Necesarry since we move this in the closures below
+  // Necessary since we move this in the closures below
   let slide_number_clone = slide_number.clone();
   let on_next = move || {
     let mut lock = slide_number_clone.lock_mut();
