@@ -4,7 +4,7 @@
 
 ```rust
 fn HelloWorld() {
-  Text::new(Hello World)
+  Text::new("Hello World")
 }
 ```
 
