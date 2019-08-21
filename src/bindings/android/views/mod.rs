@@ -1,7 +1,7 @@
 pub mod button;
 use crate::android_executor::spawn_future;
 use crate::style;
-use crate::ui_tree::{Composable, Composer, PlatformView, PlatformViewInner, COMPOSER};
+use crate::ui_tree::{Composable, Composer, PlatformView, PlatformViewInner, COMPOSER, with_parent};
 use discard::Discard;
 use futures::future::ready;
 use futures_signals::signal::{Mutable, Signal, SignalExt};
@@ -267,7 +267,7 @@ impl StackLayout {
     })
   }
 
-    pub fn height(mut self, f: f32) -> Self {
+  pub fn height(mut self, f: f32) -> Self {
     info!("UPDATING Height!!!");
     self
       .inner
@@ -284,7 +284,6 @@ impl StackLayout {
       .expect("Couldn't update");
     self
   }
-
 
   pub fn new_from_native_view(jvm: Arc<JavaVM>, n: GlobalRef) -> Self {
     let underlying_view = WiredNativeView {
@@ -327,18 +326,7 @@ impl StackLayout {
   where
     F: FnOnce(),
   {
-    COMPOSER.with(|composer| {
-      let mut composer = composer.borrow_mut();
-      std::mem::swap(&mut self.inner, composer.curent_parent.as_mut().unwrap());
-    });
-
-    f();
-
-    COMPOSER.with(|composer| {
-      let mut composer = composer.borrow_mut();
-      std::mem::swap(&mut self.inner, composer.curent_parent.as_mut().unwrap());
-    });
-
+    with_parent(&mut self.inner, f);
     self
   }
 }
