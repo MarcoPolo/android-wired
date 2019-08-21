@@ -2,3 +2,6 @@
 **/*.rs.bk
 Cargo.lock
 .idea
+android/**/.project
+android/**/.classpath
+android/**/.settings
