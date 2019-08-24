@@ -27,7 +27,7 @@ impl StackLayout {
 }
 
 #[derive(Clone)]
-struct DummyPlatformView {
+pub struct DummyPlatformView {
   el_type: &'static str,
   props: Arc<Mutex<Vec<(String, Box<dyn Any + Send>)>>>,
   children: Vec<PlatformView>,
@@ -35,7 +35,7 @@ struct DummyPlatformView {
 }
 
 impl DummyPlatformView {
-  fn new(el_type: &'static str) -> PlatformView {
+  pub fn new(el_type: &'static str) -> PlatformView {
     PlatformView {
       underlying_view: Arc::new(Mutex::new(DummyPlatformView {
         el_type,
@@ -157,9 +157,22 @@ impl PlatformViewInner for DummyPlatformView {
 
 pub struct Button<F> {
   label: Option<String>,
-  on_press: F,
+  on_press: Option<F>,
   platform_view: PlatformView,
   on_remove: Vec<DiscardOnDrop<CancelableFutureHandle>>,
+}
+
+pub struct ButtonHandle<F> {
+  on_press: F,
+}
+
+impl<F> ButtonHandle<F>
+where
+  F: Fn(),
+{
+  pub fn press(&self) {
+    (self.on_press)()
+  }
 }
 
 impl<F> Button<F>
@@ -169,9 +182,15 @@ where
   pub fn new(on_press: F) -> Self {
     Button {
       label: None,
-      on_press,
+      on_press: Some(on_press),
       platform_view: DummyPlatformView::new("Button"),
       on_remove: vec![],
+    }
+  }
+
+  pub fn handle(&mut self) -> ButtonHandle<F> {
+    ButtonHandle {
+      on_press: self.on_press.take().unwrap(),
     }
   }
 
@@ -197,10 +216,6 @@ where
       .update_prop("label", Box::new(label.clone()))
       .unwrap();
     self.label = Some(label)
-  }
-
-  pub fn press(&self) {
-    (self.on_press)();
   }
 }
 

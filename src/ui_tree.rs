@@ -1,21 +1,15 @@
 #![allow(dead_code)]
 use discard::DiscardOnDrop;
 use futures::executor::{LocalPool, LocalSpawner};
-use futures::future::ready;
 use futures::prelude::*;
 use futures::task::LocalSpawnExt;
 use futures_signals::{cancelable_future, CancelableFutureHandle};
-use futures_timer::{Delay, Interval};
 use std::any::Any;
 use std::cell::RefCell;
 use std::mem;
-use std::panic::{catch_unwind, RefUnwindSafe, UnwindSafe};
-use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
 
-use futures_signals::signal::{Mutable, Signal, SignalExt};
-use futures_signals::signal_vec::{MutableVec, SignalVecExt};
+use futures_signals::signal::Mutable;
 use std::error::Error;
 use std::fmt::{Debug, Formatter};
 
@@ -384,10 +378,18 @@ mod tests {
   use super::*;
   use crate::bindings::test::*;
   use crate::helpers::if_signal;
+  use futures::future::ready;
+  use futures_timer::{Delay, Interval};
+  use std::panic::{catch_unwind, RefUnwindSafe, UnwindSafe};
+  use std::rc::Rc;
+  use std::time::Duration;
+
+  use futures_signals::signal::{Mutable, Signal, SignalExt};
+  use futures_signals::signal_vec::{MutableVec, SignalVecExt};
 
   #[test]
   fn check_button_presses() {
-    let mut composer = Composer::new();
+    set_root_view(DummyPlatformView::new("Root"));
 
     let my_state = Mutable::new(0);
 
@@ -398,15 +400,17 @@ mod tests {
     })
     .watch_label(my_state.signal().map(|n| format!("Counter is: {}", n)));
 
+    let button_handle = button.handle();
+
     let root = StackLayout::new().with(move || {
-      Text::new("Hello World".into());
+      Text::new("Hello World");
       button;
     });
 
     // Press the button 3 times
-    // button.press();
-    // button.press();
-    // button.press();
+    button_handle.press();
+    button_handle.press();
+    button_handle.press();
 
     EXECUTOR.with(|executor| {
       let mut executor = executor.borrow_mut();
@@ -504,7 +508,7 @@ mod tests {
     // Style A
     {
       let root = StackLayout::new().with(|| {
-        Text::new("Hello World".into());
+        Text::new("Hello World");
         button;
 
         let my_vec: MutableVec<u32> = MutableVec::new_with_values(vec![1, 2, 3]);
@@ -522,7 +526,7 @@ mod tests {
       .take(5)
       .for_each(move |_| {
         println!("Pressing Button");
-        button.press();
+        // button.press();
         ready(())
       });
 
