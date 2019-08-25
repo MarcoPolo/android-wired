@@ -1,4 +1,4 @@
-# Wired
+# Wired [![CircleCI](https://circleci.com/gh/MarcoPolo/android-wired.svg?style=svg)](https://circleci.com/gh/MarcoPolo/android-wired)
 
 ## Sample - Hello World
 
