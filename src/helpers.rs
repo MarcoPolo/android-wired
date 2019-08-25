@@ -2,10 +2,12 @@
 use crate::android_executor::spawn_future;
 #[cfg(test)]
 use crate::ui_tree::spawn_future;
+#[cfg(not(test))]
+use crate::ui_tree::spawn_future;
 use crate::ui_tree::{Composable, Composer, PlatformView, PlatformViewInner, COMPOSER};
 use discard::DiscardOnDrop;
 use futures::future::ready;
-use futures_signals::signal::{Mutable, Signal, SignalExt};
+use futures_signals::signal::{Mutable, ReadOnlyMutable, Signal, SignalExt};
 use std::borrow::BorrowMut;
 
 pub fn if_signal<S, F>(s: S, f: F)
@@ -55,4 +57,22 @@ where
 
   // TODO fix
   DiscardOnDrop::leak(spawn_future(fut));
+}
+
+pub struct ReadOnlyState<T>(ReadOnlyMutable<T>);
+impl<T: Copy> ReadOnlyState<T> {
+  pub fn get(&self) -> T {
+    self.0.get()
+  }
+}
+
+pub fn use_state<S>(initial_state: S) -> (ReadOnlyState<S>, impl Fn(S))
+where
+  S: Copy,
+{
+  let state = Mutable::new(initial_state);
+  (ReadOnlyState(state.read_only()), move |next_state: S| {
+    let mut lock = state.lock_mut();
+    *lock = next_state;
+  })
 }

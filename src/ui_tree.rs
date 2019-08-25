@@ -518,6 +518,9 @@ mod tests {
     );
   }
 
+  #[test]
+  fn test_use_state() {}
+
   pub fn demo() {
     let mut composer = Composer::new();
 
