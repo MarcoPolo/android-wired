@@ -1,10 +1,10 @@
 use super::*;
-use crate::bindings::android::callback::Callback;
+use crate::bindings::callback::Callback;
 
 pub struct Button {
   inner: PlatformView,
   on_press: Option<Box<dyn Fn() + Send + Sync>>,
-  after_remove: Vec<Box<dyn FnOnce()>>,
+  after_remove: AttachedFutures,
 }
 
 impl Default for Button {
@@ -66,24 +66,49 @@ impl Button {
   where
     S: 'static + Signal<Item = String> + Send,
   {
-    let mut platform_view = self.inner.clone();
-    let f = s.for_each(move |string| {
-      platform_view
-        .update_prop("text", string.clone())
-        .expect("view is there");
-      ready(())
-    });
-
-    let cancel = spawn_future(f);
-    let handle = DiscardOnDrop::leak(cancel);
-    let cleanup = Box::new(move || {
-      handle.discard();
-    });
-
-    self.after_remove.push(cleanup);
+    self.update_prop_signal("text", s).unwrap();
     self
   }
 }
+
+impl UpdateProp<Callback> for Button {
+  fn update_prop(&mut self, k: &str, v: Callback) -> Result<(), Box<dyn Error>> {
+    self.inner.update_prop(k, v)?;
+    Ok(())
+  }
+}
+
+impl UpdatePropSignal<Callback> for Button {
+  fn update_prop_signal<S>(&mut self, k: &'static str, s: S) -> Result<(), Box<dyn Error>>
+  where
+    S: 'static + Signal<Item = Callback> + Send,
+  {
+    let mut platform_view = self.inner.clone();
+    let f = s.for_each(move |i| {
+      platform_view.update_prop(k, i).expect("view is there");
+      ready(())
+    });
+    self.after_remove.push(spawn_future(f));
+    Ok(())
+  }
+}
+
+impl UpdatePropSignal<String> for Button {
+  fn update_prop_signal<S>(&mut self, k: &'static str, s: S) -> Result<(), Box<dyn Error>>
+  where
+    S: 'static + Signal<Item = String> + Send,
+  {
+    let mut platform_view = self.inner.clone();
+    let f = s.for_each(move |i| {
+      platform_view.update_prop(k, i).expect("view is there");
+      ready(())
+    });
+    self.after_remove.push(spawn_future(f));
+    Ok(())
+  }
+}
+
+impl OnPress for Button {}
 
 impl Composable for Button {
   fn compose(&mut self, composer: &mut Composer) {

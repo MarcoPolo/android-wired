@@ -1,8 +1,9 @@
 #![allow(dead_code)]
+use crate::bindings::callback::Callback;
+use crate::bindings::view_helpers::*;
 use crate::ui_tree::{
   spawn_future, with_parent, Composable, Composer, PlatformView, PlatformViewInner,
 };
-use crate::bindings::view_helpers::*;
 use discard::DiscardOnDrop;
 use futures::future::ready;
 use futures_signals::signal::{Signal, SignalExt};
@@ -149,6 +150,14 @@ impl UpdateProp<String> for DummyPlatformView {
 
 impl UpdateProp<f32> for DummyPlatformView {
   fn update_prop(&mut self, s: &str, v: f32) -> Result<(), Box<dyn Error>> {
+    let any: Box<dyn Any + Send> = Box::new(v);
+    self.update_prop(s, any)?;
+    Ok(())
+  }
+}
+
+impl UpdateProp<Callback> for DummyPlatformView {
+  fn update_prop(&mut self, s: &str, v: Callback) -> Result<(), Box<dyn Error>> {
     let any: Box<dyn Any + Send> = Box::new(v);
     self.update_prop(s, any)?;
     Ok(())

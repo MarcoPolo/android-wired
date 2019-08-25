@@ -1,7 +1,8 @@
 #![allow(dead_code)]
+use crate::bindings::callback::Callback;
+use crate::bindings::view_helpers::*;
 use discard::DiscardOnDrop;
 use futures::executor::{LocalPool, LocalSpawner};
-use crate::bindings::view_helpers::*;
 use futures::prelude::*;
 use futures::task::LocalSpawnExt;
 use futures_signals::{cancelable_future, CancelableFutureHandle};
@@ -51,7 +52,14 @@ impl PlatformView {
 }
 
 // pub trait Prop: Debug + Any {}
-pub trait PlatformViewInner: UpdateProp<String> + UpdateProp<f32> + UpdateProp<Box<dyn Any + Send>> + Debug + Send {
+pub trait PlatformViewInner:
+  UpdateProp<String>
+  + UpdateProp<f32>
+  + UpdateProp<Callback>
+  + UpdateProp<Box<dyn Any + Send>>
+  + Debug
+  + Send
+{
   /// If you append a child that is attached somewhere else, you should move the child.
   fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>>;
   /// Do not insert a child that is already there! undefined behavior!
@@ -185,18 +193,30 @@ impl PositionContext {
   }
 }
 
-#[derive(Clone, Debug)]
+pub type AttachedFutures = Vec<DiscardOnDrop<CancelableFutureHandle>>;
+
+#[derive(Debug)]
 pub enum Transaction {
-  Add(usize),
+  Add(usize, AttachedFutures),
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct Composer {
   pub(crate) curent_parent: Option<PlatformView>,
   pub(crate) position_context: PositionContext,
   pub(crate) transactions: Vec<Transaction>,
   pub(crate) in_transaction: bool,
-  pub(crate) transaction_start_idx: PositionContext,
+}
+
+impl Clone for Composer {
+  fn clone(&self) -> Self {
+    Composer {
+      curent_parent: self.curent_parent.clone(),
+      position_context: self.position_context.clone(),
+      transactions: vec![],
+      in_transaction: false,
+    }
+  }
 }
 
 impl Default for Composer {
@@ -212,7 +232,6 @@ impl Composer {
       position_context: PositionContext::new(),
       transactions: vec![],
       in_transaction: false,
-      transaction_start_idx: PositionContext::new(),
     }
   }
 
@@ -225,8 +244,7 @@ impl Composer {
       return;
     }
     info!(
-      "Index is {} & {}. Trying to rewind these transactions: {:?}.",
-      self.transaction_start_idx.get_current_idx(),
+      "Index is {}. Trying to rewind these transactions: {:?}.",
       self.position_context.get_current_idx(),
       self.transactions
     );
@@ -239,8 +257,7 @@ impl Composer {
     self.transactions = vec![];
     for _ in 0..total_item_count {
       info!(
-        "Removing view at {} + {}",
-        self.transaction_start_idx.get_current_idx(),
+        "Removing view at {}",
         self.position_context.get_current_idx(),
       );
 
@@ -261,12 +278,15 @@ impl Composer {
     });
   }
 
-  pub fn add_view(&mut self, view: &mut PlatformView) -> Result<(), Box<dyn Error>> {
+  pub fn add_view_with_futures(
+    &mut self,
+    view: &mut PlatformView,
+    cancel_future_handles: Option<Vec<DiscardOnDrop<CancelableFutureHandle>>>,
+  ) -> Result<(), Box<dyn Error>> {
     if let Some(mut curent_parent) = self.curent_parent.take() {
       let res = if self.in_transaction {
         debug!(
-          "Inserting CHILD AT {} + {}",
-          self.transaction_start_idx.get_current_idx(),
+          "Inserting CHILD AT {}",
           self.position_context.get_current_idx()
         );
         curent_parent.insert_child_at(view, self.position_context.get_current_idx())
@@ -276,7 +296,8 @@ impl Composer {
 
       if self.in_transaction {
         self.transactions.push(Transaction::Add(
-          self.position_context.get_current_idx() - self.transaction_start_idx.get_current_idx(),
+          self.position_context.get_current_idx(),
+          cancel_future_handles.unwrap_or_else(|| vec![]),
         ));
       }
       self.position_context.inc();
@@ -284,6 +305,10 @@ impl Composer {
       return res;
     }
     Ok(())
+  }
+
+  pub fn add_view(&mut self, view: &mut PlatformView) -> Result<(), Box<dyn Error>> {
+    self.add_view_with_futures(view, None)
   }
 
   fn remove_view_at(&mut self, idx_to_remove: usize) -> Result<(), Box<dyn Error>> {
@@ -325,6 +350,12 @@ impl UpdateProp<f32> for PlatformView {
 
 impl UpdateProp<String> for PlatformView {
   fn update_prop(&mut self, s: &str, v: String) -> Result<(), Box<dyn Error>> {
+    self.underlying_view.lock().unwrap().update_prop(s, v)
+  }
+}
+
+impl UpdateProp<Callback> for PlatformView {
+  fn update_prop(&mut self, s: &str, v: Callback) -> Result<(), Box<dyn Error>> {
     self.underlying_view.lock().unwrap().update_prop(s, v)
   }
 }

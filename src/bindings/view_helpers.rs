@@ -1,3 +1,4 @@
+use crate::bindings::callback::Callback;
 use futures_signals::signal::{Mutable, Signal, SignalExt};
 use std::error::Error;
 
@@ -12,8 +13,8 @@ pub trait UpdatePropSignal<T> {
 }
 
 macro_rules! prop_method {
-    ($i:ident) => {
-      fn $i(mut self, f: f32) -> Self {
+    ($i:ident, $t:ty) => {
+      fn $i(mut self, f: $t) -> Self {
         self
           .update_prop(stringify!($i), f)
           .expect(stringify!("Couldn't update", stringify($i)));
@@ -23,46 +24,51 @@ macro_rules! prop_method {
 }
 
 macro_rules! prop_method_signal {
-    ($i:ident) => {
-      paste::item! {
-        fn [<$i _signal>] <S>(mut self, s: S) -> Self
-        where
-          S: 'static + Signal<Item = f32> + Send {
-          self
-            .update_prop_signal(stringify!($i), s)
-            .expect(stringify!("Couldn't update from signal: ", stringify($i)));
-          self
-        }
+  ($i:ident, $t:ty) => {
+    paste::item! {
+      fn [<$i _signal>] <S>(mut self, s: S) -> Self
+      where
+        S: 'static + Signal<Item = $t> + Send {
+        self
+          .update_prop_signal(stringify!($i), s)
+          .expect(stringify!("Couldn't update from signal: ", stringify($i)));
+        self
       }
-    };
+    }
+  };
 }
 
 pub trait Padding: UpdateProp<f32> + UpdatePropSignal<f32> + Sized {
-  // trace_macros!(true);
-  prop_method_signal!(pad_left);
-  // trace_macros!(false);
-  prop_method_signal!(pad_top);
-  prop_method_signal!(pad_right);
-  prop_method_signal!(pad_bottom);
+  prop_method_signal!(pad_left, f32);
+  prop_method_signal!(pad_top, f32);
+  prop_method_signal!(pad_right, f32);
+  prop_method_signal!(pad_bottom, f32);
 
-  prop_method!(pad_left);
-  prop_method!(pad_top);
-  prop_method!(pad_right);
-  prop_method!(pad_bottom);
+  prop_method!(pad_left, f32);
+  prop_method!(pad_top, f32);
+  prop_method!(pad_right, f32);
+  prop_method!(pad_bottom, f32);
+}
 
-  // fn pad(self, left: f32, top: f32, right: f32, bottom: f32) -> Self {
-  //   self
-  //     .update_prop_4("pad_bottom", (left, top, right, bottom))
-  //     .expect("Couldn't update bottom padding");
-  //   self
-  // }
+pub trait SetText: UpdateProp<String> + UpdatePropSignal<String> + Sized {
+  prop_method!(text, String);
+  prop_method_signal!(text, String);
+}
 
-  // fn pad_signal<S>(self, s: S) -> Self
-  // where
-  //   S: 'static + Signal<Item = (f32, f32, f32, f32)> + Send {
-  //   self
-  //     .update_prop_4_signal("pad", s)
-  //     .expect("Couldn't update padding signal");
-  //   self
-  // }
+pub trait SetTextSize: UpdateProp<f32> + UpdatePropSignal<f32> + Sized {
+  prop_method!(text_size, f32);
+  prop_method_signal!(text_size, f32);
+}
+
+pub trait SetXY: UpdateProp<f32> + UpdatePropSignal<f32> + Sized {
+  prop_method!(set_x, f32);
+  prop_method!(set_y, f32);
+
+  prop_method_signal!(set_x, f32);
+  prop_method_signal!(set_y, f32);
+}
+
+pub trait OnPress: UpdateProp<Callback> + UpdatePropSignal<Callback> + Sized {
+  prop_method!(on_press, Callback);
+  prop_method_signal!(on_press, Callback);
 }

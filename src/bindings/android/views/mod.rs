@@ -1,12 +1,13 @@
 pub mod button;
 use crate::android_executor::spawn_future;
+use crate::bindings::view_helpers::*;
 use crate::style;
 use crate::ui_tree::{
-  with_parent, Composable, Composer, PlatformView, PlatformViewInner, COMPOSER,
+  with_parent, AttachedFutures, Composable, Composer, PlatformView, PlatformViewInner, COMPOSER,
 };
-use discard::Discard;
 use futures::future::ready;
 use futures_signals::signal::{Mutable, Signal, SignalExt};
+use futures_signals::CancelableFutureHandle;
 use jni::objects::{GlobalRef, JClass, JObject, JString, JValue};
 use jni::{JNIEnv, JavaVM};
 use std::any::Any;
@@ -17,12 +18,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use {
-  discard::DiscardOnDrop,
+  discard::{Discard, DiscardOnDrop},
   futures::future::{BoxFuture, FutureExt},
 };
-use crate::bindings::view_helpers::*;
 
-use crate::bindings::android::callback::Callback;
+use crate::bindings::callback::Callback;
 
 pub use button::Button;
 
@@ -48,14 +48,12 @@ thread_local! {
 
 pub struct Text {
   inner: PlatformView,
-  after_remove: Vec<Box<dyn FnOnce()>>,
+  after_remove: AttachedFutures,
 }
 
 impl UpdateProp<f32> for Text {
   fn update_prop(&mut self, k: &str, v: f32) -> Result<(), Box<dyn Error>> {
-    self
-      .inner
-      .update_prop(k, v)?;
+    self.inner.update_prop(k, v)?;
     Ok(())
   }
 }
@@ -63,35 +61,41 @@ impl UpdateProp<f32> for Text {
 impl UpdatePropSignal<f32> for Text {
   fn update_prop_signal<S>(&mut self, k: &'static str, s: S) -> Result<(), Box<dyn Error>>
   where
-    S: 'static + Signal<Item = f32> + Send {
+    S: 'static + Signal<Item = f32> + Send,
+  {
     let mut platform_view = self.inner.clone();
     let f = s.for_each(move |i| {
-      platform_view
-        .update_prop(k, i)
-        .expect("view is there");
+      platform_view.update_prop(k, i).expect("view is there");
       ready(())
     });
 
-    let cancel = spawn_future(f);
-    let handle = DiscardOnDrop::leak(cancel);
-    let cleanup = Box::new(move || {
-      handle.discard();
-    });
-    // DiscardOnDrop::leak(cancel);
-    // let id = AFTER_REMOVE_CALLBACKS.with(move |r| {
-    //   let after_remove = r.borrow_mut();
-    //   // after_remove.push(cleanup);
-    //   after_remove.len()
-    // });
-
-    self.after_remove.push(cleanup);
+    self.after_remove.push(spawn_future(f));
     Ok(())
   }
 }
 
+impl UpdateProp<String> for Text {
+  fn update_prop(&mut self, k: &str, v: String) -> Result<(), Box<dyn Error>> {
+    self.inner.update_prop(k, v)?;
+    Ok(())
+  }
+}
 
+impl UpdatePropSignal<String> for Text {
+  fn update_prop_signal<S>(&mut self, k: &'static str, s: S) -> Result<(), Box<dyn Error>>
+  where
+    S: 'static + Signal<Item = String> + Send,
+  {
+    let mut platform_view = self.inner.clone();
+    let f = s.for_each(move |i| {
+      platform_view.update_prop(k, i).expect("view is there");
+      ready(())
+    });
 
-impl Padding for Text {}
+    self.after_remove.push(spawn_future(f));
+    Ok(())
+  }
+}
 
 pub(crate) fn wrap_native_view(g: GlobalRef) -> Arc<Mutex<GlobalRef>> {
   Arc::new(Mutex::new(g))
@@ -124,121 +128,27 @@ impl Default for Text {
   }
 }
 
+impl SetXY for Text {}
+impl SetText for Text {}
+impl Padding for Text {}
+impl SetTextSize for Text {}
+
 impl Text {
   pub fn new<S>(s: S) -> Text
   where
     S: Into<String>,
   {
-    let mut t = Self::default();
-    t.text_mut(s.into());
-    t
-  }
-
-  pub fn x_pos_signal<S>(mut self, s: S) -> Self
-  where
-    S: 'static + Signal<Item = f32> + Send,
-  {
-    let mut platform_view = self.inner.clone();
-    let f = s.for_each(move |i| {
-      platform_view
-        .update_prop("set_x", i)
-        .expect("view is there");
-      ready(())
-    });
-
-    let cancel = spawn_future(f);
-    let handle = DiscardOnDrop::leak(cancel);
-    let cleanup = Box::new(move || {
-      handle.discard();
-    });
-    // DiscardOnDrop::leak(cancel);
-    // let id = AFTER_REMOVE_CALLBACKS.with(move |r| {
-    //   let after_remove = r.borrow_mut();
-    //   // after_remove.push(cleanup);
-    //   after_remove.len()
-    // });
-
-    self.after_remove.push(cleanup);
-    self
-  }
-
-  pub fn padding_left_signal<S>(mut self, s: S) -> Self
-  where
-    S: 'static + Signal<Item = f32> + Send,
-  {
-    let mut platform_view = self.inner.clone();
-    let f = s.for_each(move |i| {
-      platform_view
-        .update_prop("left_pad", i)
-        .expect("view is there");
-      ready(())
-    });
-
-    let cancel = spawn_future(f);
-    let handle = DiscardOnDrop::leak(cancel);
-    let cleanup = Box::new(move || {
-      handle.discard();
-    });
-    // DiscardOnDrop::leak(cancel);
-    // let id = AFTER_REMOVE_CALLBACKS.with(move |r| {
-    //   let after_remove = r.borrow_mut();
-    //   // after_remove.push(cleanup);
-    //   after_remove.len()
-    // });
-
-    self.after_remove.push(cleanup);
-    self
-  }
-
-  pub fn text_signal<S>(mut self, s: S) -> Self
-  where
-    S: 'static + Signal<Item = String> + Send,
-  {
-    let mut platform_view = self.inner.clone();
-    let f = s.for_each(move |string| {
-      platform_view
-        .update_prop("text", string.clone())
-        .expect("view is there");
-      ready(())
-    });
-
-    let cancel = spawn_future(f);
-    let handle = DiscardOnDrop::leak(cancel);
-    let cleanup = Box::new(move || {
-      handle.discard();
-    });
-    // DiscardOnDrop::leak(cancel);
-    // let id = AFTER_REMOVE_CALLBACKS.with(move |r| {
-    //   let after_remove = r.borrow_mut();
-    //   // after_remove.push(cleanup);
-    //   after_remove.len()
-    // });
-
-    self.after_remove.push(cleanup);
-    self
-  }
-
-  pub fn size(mut self, f: f32) -> Self {
-    self.size_mut(f);
-    self
-  }
-
-  pub fn text_mut(&mut self, s: String) {
-    self
-      .inner
-      .update_prop("text", s)
-      .expect("Couldn't update text");
-  }
-
-  pub fn size_mut(&mut self, f: f32) {
-    self.inner.update_prop("text_size", f).unwrap();
+    let t = Self::default();
+    t.text(s.into())
   }
 }
 
 impl Composable for Text {
   fn compose(&mut self, composer: &mut Composer) {
+    let mut after_remove = vec![];
+    std::mem::swap(&mut self.after_remove, &mut after_remove);
     composer
-      .add_view(&mut self.inner)
+      .add_view_with_futures(&mut self.inner, Some(after_remove))
       .expect("Couldn't add view");
   }
 }
@@ -294,10 +204,7 @@ impl StackLayout {
 
   pub fn width(mut self, f: f32) -> Self {
     info!("UPDATING width!!");
-    self
-      .inner
-      .update_prop("width", f)
-      .expect("Couldn't update");
+    self.inner.update_prop("width", f).expect("Couldn't update");
     self
   }
 
@@ -323,18 +230,12 @@ impl StackLayout {
   }
 
   pub fn set_x(mut self, f: f32) -> Self {
-    self
-      .inner
-      .update_prop("set_x", f)
-      .expect("Couldn't update");
+    self.inner.update_prop("set_x", f).expect("Couldn't update");
     self
   }
 
   pub fn set_y(mut self, f: f32) -> Self {
-    self
-      .inner
-      .update_prop("set_y", f)
-      .expect("Couldn't update");
+    self.inner.update_prop("set_y", f).expect("Couldn't update");
     self
   }
 
@@ -362,32 +263,53 @@ impl fmt::Debug for WiredNativeView {
 impl UpdateProp<f32> for WiredNativeView {
   fn update_prop(&mut self, s: &str, v: f32) -> Result<(), Box<dyn Error>> {
     let env = self.jvm.get_env()?;
-      env.call_method(
-        self.native_view.lock().unwrap().as_obj(),
-        "updateProp",
-        "(Ljava/lang/String;F)V",
-        &[
-          JValue::Object(env.new_string(s).unwrap().into()),
-          JValue::Float(v),
-        ],
-      )?;
-      Ok(())
+    env.call_method(
+      self.native_view.lock().unwrap().as_obj(),
+      "updateProp",
+      "(Ljava/lang/String;F)V",
+      &[
+        JValue::Object(env.new_string(s).unwrap().into()),
+        JValue::Float(v),
+      ],
+    )?;
+    Ok(())
   }
 }
 
 impl UpdateProp<String> for WiredNativeView {
   fn update_prop(&mut self, s: &str, string: String) -> Result<(), Box<dyn Error>> {
     let env = self.jvm.get_env()?;
-      env.call_method(
-        self.native_view.lock().unwrap().as_obj(),
-        "updateProp",
-        "(Ljava/lang/String;Ljava/lang/Object;)V",
-        &[
-          JValue::Object(env.new_string(s).unwrap().into()),
-          JValue::Object(env.new_string(&string).unwrap().into()),
-        ],
-      )?;
-      Ok(())
+    env.call_method(
+      self.native_view.lock().unwrap().as_obj(),
+      "updateProp",
+      "(Ljava/lang/String;Ljava/lang/String;)V",
+      &[
+        JValue::Object(env.new_string(s).unwrap().into()),
+        JValue::Object(env.new_string(&string).unwrap().into()),
+      ],
+    )?;
+    Ok(())
+  }
+}
+
+impl UpdateProp<Callback> for WiredNativeView {
+  fn update_prop(&mut self, s: &str, cb: Callback) -> Result<(), Box<dyn Error>> {
+    let env = self.jvm.get_env()?;
+    debug!("Setting callback");
+    let view_class = env.find_class("dev/fruit/androiddemo/RustCallback")?;
+    let callback_obj = env.new_object(view_class, "()V", &[])?;
+    env.set_rust_field(callback_obj, "ptr", cb)?;
+
+    env.call_method(
+      self.native_view.lock().unwrap().as_obj(),
+      "updateProp",
+      "(Ljava/lang/String;Ldev/fruit/androiddemo/RustCallback;)V",
+      &[
+        JValue::Object(env.new_string(s).unwrap().into()),
+        JValue::Object(callback_obj),
+      ],
+    )?;
+    Ok(())
   }
 }
 
@@ -613,10 +535,7 @@ impl PhysicsLayout {
 
   pub fn width(mut self, f: f32) -> Self {
     info!("UPDATING width!!");
-    self
-      .inner
-      .update_prop("width", f)
-      .expect("Couldn't update");
+    self.inner.update_prop("width", f).expect("Couldn't update");
     self
   }
 

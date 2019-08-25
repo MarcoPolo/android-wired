@@ -23,11 +23,10 @@ where
 {
   let mut current_composer_context: Composer = COMPOSER.with(|c| {
     let mut composer = c.borrow_mut();
-    let mut current_composer_context = composer.clone();
+    let current_composer_context = composer.clone();
     let mut transaction_start_idx = current_composer_context.position_context.clone();
     std::mem::swap(&mut transaction_start_idx, &mut composer.position_context);
     composer.position_context.push_new_frame();
-    current_composer_context.transaction_start_idx = transaction_start_idx;
     current_composer_context
   });
 

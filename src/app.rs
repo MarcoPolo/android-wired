@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use crate::android_executor::spawn_future;
 use crate::bindings::android::views::{Button, StackLayout, Text};
+use crate::bindings::view_helpers::*;
 use crate::helpers::if_signal;
 use discard::DiscardOnDrop;
 use futures::future::ready;
@@ -18,7 +19,7 @@ pub fn main() -> StackLayout {
   };
 
   StackLayout::new().with(move || {
-    Text::new("Hello WIRED").size(32.0);
+    Text::new("Hello WIRED").text_size(32.0);
     Button::new(on_press);
     Text::default()
       .text_signal(
@@ -26,14 +27,14 @@ pub fn main() -> StackLayout {
           .signal()
           .map(|i| format!("You've pressed it {} times", i)),
       )
-      .size(32.0);
+      .text_size(32.0);
     if_signal(count.signal().map(|i| i % 2 == 0), |is_even| {
       if is_even {
         Text::new("Number is even!");
       }
     });
-    marquee("WEEE").size(22.0);
-    Text::new("This is some other message").size(22.0);
+    marquee("WEEE").text_size(22.0);
+    Text::new("This is some other message").text_size(22.0);
   })
 }
 
@@ -54,5 +55,5 @@ where
   let cancel = spawn_future(f);
   DiscardOnDrop::leak(cancel);
 
-  Text::new(text).x_pos_signal(count_signal.map(|f| f - 200.0))
+  Text::new(text).set_x_signal(count_signal.map(|f| f - 200.0))
 }

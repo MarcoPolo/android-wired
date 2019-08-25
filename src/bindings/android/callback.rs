@@ -18,10 +18,7 @@ use {
     time::Duration,
   },
 };
-
-pub struct Callback {
-  pub(crate) f: Arc<Box<dyn Fn() + Send + Sync>>,
-}
+use crate::bindings::callback::Callback;
 
 #[no_mangle]
 pub unsafe extern "C" fn Java_dev_fruit_androiddemo_RustCallback_call(

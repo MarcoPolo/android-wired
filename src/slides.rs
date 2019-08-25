@@ -69,11 +69,11 @@ pub fn main() {
 
 fn basic_slide(info: &BasicSlideInfo) {
   Text::new(info.title)
-    .size(32.0)
+    .text_size(32.0)
     .pad_left(20.0)
     .pad_top(20.0);
   for reason in info.reasons.iter() {
-    Text::new(*reason).size(20.0).pad_top(20.0).pad_left(20.0);
+    Text::new(*reason).text_size(20.0).pad_top(20.0).pad_left(20.0);
   }
 }
 
