@@ -1,4 +1,5 @@
 use crate::bindings::callback::Callback;
+use crate::style;
 use futures_signals::signal::{Mutable, Signal, SignalExt};
 use std::error::Error;
 
@@ -71,4 +72,28 @@ pub trait SetXY: UpdateProp<f32> + UpdatePropSignal<f32> + Sized {
 pub trait OnPress: UpdateProp<Callback> + UpdatePropSignal<Callback> + Sized {
   prop_method!(on_press, Callback);
   prop_method_signal!(on_press, Callback);
+}
+
+pub trait SetHeightWidth: UpdateProp<f32> + UpdatePropSignal<f32> + Sized {
+  prop_method!(height, f32);
+  prop_method!(width, f32);
+
+  prop_method_signal!(height, f32);
+  prop_method_signal!(width, f32);
+}
+
+pub trait SetOrientation: UpdateProp<String> + Sized {
+  fn orientation(mut self, o: style::Orientation) -> Self {
+    let string: String = o.to_string();
+    self
+      .update_prop("orientation", string)
+      .expect("Couldn't update orientation");
+    self
+  }
+}
+
+pub trait ParentWith: Sized {
+  fn with<F>(self, f: F) -> Self
+  where
+    F: FnOnce();
 }
