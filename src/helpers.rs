@@ -65,12 +65,21 @@ impl<T: Copy> ReadOnlyState<T> {
   }
 }
 
-pub fn use_state<S>(initial_state: S) -> (ReadOnlyState<S>, impl Fn(S))
+pub fn use_state<S>(initial_state: S) -> (ReadOnlyMutable<S>, impl Fn(S)) {
+  let state = Mutable::new(initial_state);
+  (state.read_only(), move |next_state: S| {
+    let mut lock = state.lock_mut();
+    *lock = next_state;
+  })
+}
+
+pub fn use_state_reducer<S, R>(initial_state: S) -> (ReadOnlyMutable<S>, impl Fn(R))
 where
-  S: Copy,
+  R: Fn(&S) -> S,
 {
   let state = Mutable::new(initial_state);
-  (ReadOnlyState(state.read_only()), move |next_state: S| {
+  (state.read_only(), move |next_state_reducer: R| {
+    let next_state = next_state_reducer(&state.lock_ref());
     let mut lock = state.lock_mut();
     *lock = next_state;
   })

@@ -80,9 +80,15 @@ pub fn with_parent<F>(parent: &mut PlatformView, f: F)
 where
   F: FnOnce(),
 {
+  let mut position_context = PositionContext::new();
   COMPOSER.with(|composer| {
     let mut composer = composer.borrow_mut();
-    std::mem::swap(parent, composer.curent_parent.as_mut().unwrap());
+    std::mem::swap(
+      parent,
+      composer.curent_parent.as_mut().expect("No Root View set"),
+    );
+
+    std::mem::swap(&mut position_context, &mut composer.position_context);
   });
 
   f();
@@ -90,6 +96,8 @@ where
   COMPOSER.with(|composer| {
     let mut composer = composer.borrow_mut();
     std::mem::swap(parent, composer.curent_parent.as_mut().unwrap());
+
+    std::mem::swap(&mut position_context, &mut composer.position_context);
   });
 }
 
@@ -139,13 +147,6 @@ fn current_idx() -> usize {
   COMPOSER.with(|c| {
     let active_composer = c.borrow();
     active_composer.position_context.get_current_idx()
-  })
-}
-
-fn current_position_context() -> PositionContext {
-  COMPOSER.with(|c| {
-    let active_composer = c.borrow();
-    active_composer.position_context.clone()
   })
 }
 
@@ -375,7 +376,7 @@ impl PlatformViewInner for PlatformView {
 mod tests {
   use super::*;
   use crate::bindings::test::*;
-  use crate::helpers::if_signal;
+  use crate::helpers::{if_signal, use_state, use_state_reducer};
   // use futures::future::ready;
   // use futures_timer::{Delay, Interval};
   // use std::panic::{catch_unwind, RefUnwindSafe, UnwindSafe};
@@ -385,6 +386,13 @@ mod tests {
   use futures_signals::signal::{Mutable, SignalExt};
 
   use simple_logger;
+
+  fn current_position_context() -> PositionContext {
+    COMPOSER.with(|c| {
+      let active_composer = c.borrow();
+      active_composer.position_context.clone()
+    })
+  }
 
   #[test]
   fn check_button_presses() {
@@ -427,7 +435,7 @@ mod tests {
 
   #[test]
   fn handle_removal() {
-    simple_logger::init().unwrap();
+    simple_logger::init().unwrap_or(());
     set_root_view(DummyPlatformView::new("Root"));
     let my_state = Mutable::new(true);
 
@@ -442,9 +450,9 @@ mod tests {
     button.label("Press me to get rid of me!".into());
     let button_handle = button.handle();
 
-    let root = StackLayout::new().with(move || {
+    let root = StackLayout::new().with(|| {
       Text::new("Hello World");
-      if_signal(my_state.signal(), move |showing| {
+      if_signal(my_state.signal(), |showing| {
         if showing {
           assert_eq!(current_idx(), 1);
           Text::new("Breaking news,");
@@ -469,47 +477,21 @@ mod tests {
 
     assert_eq!(*my_state_clone2.lock_ref(), true);
 
-    assert_eq!(
-      current_position_context()
-        .children_count_stack
-        .iter()
-        .map(|m| { m.read_only().get() })
-        .collect::<Vec<usize>>(),
-      vec![1, 0, 0, 0]
-    );
-
-    EXECUTOR.with(|executor| {
-      let mut executor = executor.borrow_mut();
-      executor.run_until_stalled();
-    });
-
-    assert_eq!(
-      current_position_context()
-        .children_count_stack
-        .iter()
-        .map(|m| { m.read_only().get() })
-        .collect::<Vec<usize>>(),
-      vec![3, 1, 0, 0]
-    );
+    run_until_stalled();
 
     assert_eq!(
       format!("{:?}", root.underlying_view),
       "StackLayout View (props = [])[\n    Text View (props = [(\"text\", \"Hello World\")]),\n    Text View (props = [(\"text\", \"Breaking news,\")]),\n    Text View (props = [(\"text\", \"It was true\")]),\n    Button View (props = [(\"label\", \"Press me to get rid of me!\")]),\n]"
     );
-    assert_eq!(current_idx(), 4);
 
     println!("pressing button");
     button_handle.press();
 
-    EXECUTOR.with(|executor| {
-      let mut executor = executor.borrow_mut();
-      executor.run_until_stalled();
-    });
+    run_until_stalled();
 
     println!("Root is {:?}", root.underlying_view);
 
     assert_eq!(*my_state_clone2.lock_ref(), false);
-    assert_eq!(current_idx(), 3);
     assert_eq!(
       "StackLayout View (props = [])[\n    Text View (props = [(\"text\", \"Hello World\")]),\n    Text View (props = [(\"text\", \"It was not true\")]),\n    Text View (props = [(\"text\", \"This will only show if false\")]),\n]",
       format!("{:?}", root.underlying_view)
@@ -517,5 +499,99 @@ mod tests {
   }
 
   #[test]
-  fn test_use_state() {}
+  fn test_use_state() {
+    simple_logger::init().unwrap_or(());
+    set_root_view(DummyPlatformView::new("Root"));
+
+    let (state, set_state) = use_state(format!("Hello World: {}", 0));
+
+    assert_eq!(format!("Hello World: 0"), *state.lock_ref());
+    set_state(format!("Hello World: {}", 1));
+    assert_eq!(format!("Hello World: 1"), *state.lock_ref());
+  }
+
+  #[test]
+  fn test_use_state_reducer() {
+    let (state, set_state) = use_state_reducer(0);
+
+    assert_eq!(0, *state.lock_ref());
+    set_state(|n| n + 1);
+    assert_eq!(1, *state.lock_ref());
+  }
+
+  fn run_until_stalled() {
+    EXECUTOR.with(|executor| {
+      let mut executor = executor.borrow_mut();
+      executor.run_until_stalled();
+    });
+  }
+
+  #[test]
+  fn test_use_state_with_text() {
+    simple_logger::init().unwrap_or(());
+    set_root_view(DummyPlatformView::new("Root"));
+
+    let (state, set_state) = use_state_reducer(0);
+    let msg = state.signal().map(|n| format!("Hello World: {}", n));
+
+    let root = StackLayout::new().with(|| {
+      Text::default().text_signal(msg);
+    });
+
+    run_until_stalled();
+    assert_eq!(
+      format!("{:?}", root.underlying_view),
+      "StackLayout View (props = [])[\n    Text View (props = [(\"text\", \"Hello World: 0\")]),\n]"
+    );
+
+    set_state(|n| n + 1);
+
+    run_until_stalled();
+
+    assert_eq!(
+      format!("{:?}", root.underlying_view),
+      "StackLayout View (props = [])[\n    Text View (props = [(\"text\", \"Hello World: 1\")]),\n]"
+    );
+  }
+
+  #[test]
+  fn test_transaction_in_a_nest() {
+    simple_logger::init().unwrap_or(());
+    set_root_view(DummyPlatformView::new("Root"));
+
+    let (state, set_state) = use_state_reducer(true);
+
+    let root = StackLayout::new().with(|| {
+      Text::new("First");
+      StackLayout::new().with(|| {
+        if_signal(state.signal(), |show| {
+          if !show {
+            Text::new("First + 1");
+          }
+        });
+        StackLayout::new().with(|| {
+          if_signal(state.signal(), |show| {
+            if show {
+              Text::new("middle");
+            }
+          })
+        });
+      });
+      Text::new("last - 1");
+      Text::new("last");
+    });
+
+    run_until_stalled();
+    warn!("{:?}", root.underlying_view);
+    assert_eq!(
+      format!("{:?}", root.underlying_view),
+      "StackLayout View (props = [])[\n    Text View (props = [(\"text\", \"First\")]),\n    StackLayout View (props = [])[\n        StackLayout View (props = [])[\n            Text View (props = [(\"text\", \"middle\")]),\n        ],\n    ],\n    Text View (props = [(\"text\", \"last - 1\")]),\n    Text View (props = [(\"text\", \"last\")]),\n]"
+    );
+
+    set_state(|n| !n);
+    run_until_stalled();
+
+    warn!("{:?}", root.underlying_view);
+    assert_eq!(format!("{:?}", root.underlying_view), "StackLayout View (props = [])[\n    Text View (props = [(\"text\", \"First\")]),\n    StackLayout View (props = [])[\n        Text View (props = [(\"text\", \"First + 1\")]),\n        StackLayout View (props = []),\n    ],\n    Text View (props = [(\"text\", \"last - 1\")]),\n    Text View (props = [(\"text\", \"last\")]),\n]");
+  }
 }

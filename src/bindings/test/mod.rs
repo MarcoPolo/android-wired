@@ -79,6 +79,14 @@ pub struct Text {
   underlying_view: Option<PlatformView>,
 }
 
+impl Default for Text {
+  fn default() -> Self {
+    Text {
+      underlying_view: Some(DummyPlatformView::new("Text")),
+    }
+  }
+}
+
 impl Composable for Text {
   fn compose(&mut self, composer: &mut Composer) {
     if let Some(mut underlying_view) = self.underlying_view.take() {
@@ -99,6 +107,23 @@ impl Text {
       .update_prop("text", Box::new(text.into()))
       .unwrap();
     t
+  }
+
+  pub fn text_signal<S>(self, s: S) -> Self
+  where
+    S: 'static + Signal<Item = String> + Send,
+  {
+    let mut platform_view = self.underlying_view.clone().unwrap();
+    let f = s.for_each(move |string| {
+      platform_view
+        .update_prop("text", Box::new(string.clone()))
+        .expect("view is there");
+      ready(())
+    });
+
+    let cancel = spawn_future(f);
+    DiscardOnDrop::leak(cancel);
+    self
   }
 
   fn with_view(self, v: PlatformView) -> Text {
