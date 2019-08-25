@@ -1,6 +1,7 @@
 pub mod button;
 use crate::android_executor::spawn_future;
 use crate::style;
+#[macro_use]
 use crate::ui_tree::{Composable, Composer, PlatformView, PlatformViewInner, COMPOSER, with_parent};
 use discard::Discard;
 use futures::future::ready;
@@ -22,19 +23,6 @@ use {
 use crate::bindings::android::callback::Callback;
 
 pub use button::Button;
-
-macro_rules! auto_compose {
-  ($e:ty) => {
-    impl Drop for $e {
-      fn drop(&mut self) {
-        COMPOSER.with(|c| {
-          let mut c = c.borrow_mut();
-          self.compose(&mut c);
-        })
-      }
-    }
-  };
-}
 
 auto_compose!(PhysicsLayout);
 auto_compose!(StackLayout);

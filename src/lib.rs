@@ -1,9 +1,39 @@
+pub mod ui_tree;
+
+#[macro_use]
+mod macros {
+    macro_rules! auto_compose {
+        ($e:ty) => {
+            impl Drop for $e {
+                fn drop(&mut self) {
+                    crate::ui_tree::COMPOSER.with(|c| {
+                        let mut c = c.borrow_mut();
+                        crate::ui_tree::Composable::compose(self, &mut c)
+                    })
+                }
+            }
+        };
+    }
+
+    macro_rules! auto_compose_T {
+        ($e:ty) => {
+            impl<T> Drop for $e {
+                fn drop(&mut self) {
+                    crate::ui_tree::COMPOSER.with(|c| {
+                        let mut c = c.borrow_mut();
+                        crate::ui_tree::Composable::compose(self, &mut c)
+                    })
+                }
+            }
+        };
+    }
+}
+
 pub mod android_executor;
 mod app;
 pub mod bindings;
 pub mod helpers;
 pub mod style;
-pub mod ui_tree;
 
 mod slides;
 
@@ -13,7 +43,6 @@ extern crate log;
 extern crate android_logger;
 #[cfg(target_os = "android")]
 use android_logger::Config;
-
 #[cfg(target_os = "android")]
 use bindings::android::views;
 

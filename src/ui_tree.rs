@@ -143,6 +143,13 @@ fn current_idx() -> usize {
   })
 }
 
+fn current_position_context() -> PositionContext {
+  COMPOSER.with(|c| {
+    let active_composer = c.borrow();
+    active_composer.position_context.clone()
+  })
+}
+
 impl PositionContext {
   fn new() -> PositionContext {
     PositionContext {
@@ -214,20 +221,15 @@ impl Composer {
   }
 
   pub(crate) fn rewind_transaction(&mut self) {
-    if !self.transactions.is_empty() {
-      debug!(
-        "Trying to rewind these transactions: {:?}",
-        self.transactions
-      );
+    if self.transactions.is_empty() {
+      return;
     }
-
-    let removals: Vec<usize> = self
-      .transactions
-      .iter()
-      .filter_map(|t| match t {
-        Transaction::Add(idx) => Some(*idx),
-      })
-      .collect();
+    info!(
+      "Index is {} & {}. Trying to rewind these transactions: {:?}.",
+      self.transaction_start_idx.get_current_idx(),
+      self.position_context.get_current_idx(),
+      self.transactions
+    );
 
     let total_item_count = self.transactions.len();
     if !self.transactions.is_empty() {
@@ -235,7 +237,7 @@ impl Composer {
     }
 
     self.transactions = vec![];
-    for idx in 0..total_item_count {
+    for _ in 0..total_item_count {
       info!(
         "Removing view at {} + {}",
         self.transaction_start_idx.get_current_idx(),
@@ -243,10 +245,7 @@ impl Composer {
       );
 
       self
-        .remove_view_at(
-          self.transaction_start_idx.get_current_idx() + self.position_context.get_current_idx()
-            - 1,
-        )
+        .remove_view_at(self.position_context.get_current_idx() - 1)
         .unwrap();
     }
   }
@@ -387,6 +386,8 @@ mod tests {
   use futures_signals::signal::{Mutable, Signal, SignalExt};
   use futures_signals::signal_vec::{MutableVec, SignalVecExt};
 
+  use simple_logger;
+
   #[test]
   fn check_button_presses() {
     set_root_view(DummyPlatformView::new("Root"));
@@ -402,10 +403,12 @@ mod tests {
 
     let button_handle = button.handle();
 
-    let root = StackLayout::new().with(move || {
-      Text::new("Hello World");
-      button;
-    });
+    {
+      StackLayout::new().with(move || {
+        Text::new("Hello World");
+        mem::drop(button);
+      });
+    }
 
     // Press the button 3 times
     button_handle.press();
@@ -426,6 +429,8 @@ mod tests {
 
   #[test]
   fn handle_removal() {
+    simple_logger::init().unwrap();
+    set_root_view(DummyPlatformView::new("Root"));
     let my_state = Mutable::new(true);
 
     let my_state_clone = my_state.clone();
@@ -435,9 +440,9 @@ mod tests {
       *lock = false;
     };
 
-    // let mut button = Button::new(btn_press);
-    // let mut button = Button::new(|| {});
-    // button.label("Press me to get rid of me!".into());
+    let mut button = Button::new(btn_press.clone());
+    button.label("Press me to get rid of me!".into());
+    let button_handle = button.handle();
 
     let root = StackLayout::new().with(move || {
       Text::new("Hello World");
@@ -452,7 +457,8 @@ mod tests {
       });
       if_signal(my_state.signal(), move |showing| {
         if showing {
-          Button::new(|| {}).label("Press me to get rid of me!".into());
+          let mut button = Button::new(btn_press.clone());
+          button.label("Press me to get rid of me!".into());
         }
       });
 
@@ -465,18 +471,37 @@ mod tests {
 
     assert_eq!(*my_state_clone2.lock_ref(), true);
 
+    assert_eq!(
+      current_position_context()
+        .children_count_stack
+        .iter()
+        .map(|m| { m.read_only().get() })
+        .collect::<Vec<usize>>(),
+      vec![1, 0, 0, 0]
+    );
+
     EXECUTOR.with(|executor| {
       let mut executor = executor.borrow_mut();
       executor.run_until_stalled();
     });
 
     assert_eq!(
-      "StackLayout View (props = [])[\n    Text View (props = [(\"text\", \"Hello World\")]),\n    Text View (props = [(\"text\", \"Breaking news,\")]),\n    Text View (props = [(\"text\", \"It was true\")]),\n    Button View (props = [(\"label\", \"Press me to get rid of me!\")]),\n]",
-      format!("{:?}", root.underlying_view)
+      current_position_context()
+        .children_count_stack
+        .iter()
+        .map(|m| { m.read_only().get() })
+        .collect::<Vec<usize>>(),
+      vec![3, 1, 0, 0]
+    );
+
+    assert_eq!(
+      format!("{:?}", root.underlying_view),
+      "StackLayout View (props = [])[\n    Text View (props = [(\"text\", \"Hello World\")]),\n    Text View (props = [(\"text\", \"Breaking news,\")]),\n    Text View (props = [(\"text\", \"It was true\")]),\n    Button View (props = [(\"label\", \"Press me to get rid of me!\")]),\n]"
     );
     assert_eq!(current_idx(), 4);
 
-    btn_press();
+    println!("pressing button");
+    button_handle.press();
 
     EXECUTOR.with(|executor| {
       let mut executor = executor.borrow_mut();
@@ -538,25 +563,6 @@ mod tests {
         .run_until(Delay::new(Duration::from_secs(5)))
         .unwrap();
     })
-
-    // Style B
-    // {
-    //   let root = StackLayout::new().with(&mut composer, |composer| {
-    //     Text::new("Hello World".into()).compose(composer);
-    //     let mut button = Button::new(|| {
-    //       counter_state.set(counter_state.get() + 1);
-    //     });
-    //     button.watch_label_mut(&counter_state.map(|n| format!("Counter is: {}", n)));
-    //     button.compose(composer);
-    //   });
-    // }
-
-    // Style c
-    // {
-    //   let root = StackLayout!(
-    //     Text!(name = "Foo")
-    //   )
-    // }
   }
 
 }

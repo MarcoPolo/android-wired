@@ -109,8 +109,19 @@ impl Text {
 }
 
 impl PlatformViewInner for DummyPlatformView {
+  // fn update_prop_string(&mut self, s: &str, v: String) -> Result<(), Box<dyn Error>> {
+  //   println!("Updating {} on {:?} with {:?}", s, self, &v);
+  //   let mut props = self.props.lock().unwrap();
+  //   if let Some(i) = props.iter().position(|(p, _)| p == s) {
+  //     props[i] = (s.into(), Box::new(v));
+  //   } else {
+  //     props.push((s.into(), Box::new(v)));
+  //   }
+  //   Ok(())
+  // }
+
   fn update_prop(&mut self, s: &str, v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
-    println!("Updating {} on {:?} with {:?}", s, self, v);
+    println!("Updating {} on {:?} with {:?}", s, self, &v);
     let mut props = self.props.lock().unwrap();
     if let Some(i) = props.iter().position(|(p, _)| p == s) {
       props[i] = (s.into(), v);
@@ -224,3 +235,16 @@ impl<F> Composable for Button<F> {
     composer.add_view(&mut self.platform_view).unwrap();
   }
 }
+
+impl Composable for StackLayout {
+  fn compose(&mut self, composer: &mut Composer) {
+    info!("Composing stack layout");
+    composer
+      .add_view(&mut self.underlying_view)
+      .expect("Couldn't add view");
+  }
+}
+
+auto_compose!(StackLayout);
+auto_compose!(Text);
+auto_compose_T!(Button<T>);
