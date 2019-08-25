@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use crate::bindings::android::views::*;
+use crate::bindings::view_helpers::*;
 use crate::helpers::match_signal;
 use crate::style::Orientation;
 use futures_signals::signal::Mutable;

@@ -46,7 +46,7 @@ impl Button {
   }
 
   pub fn size(mut self, f: f32) -> Self {
-    self.inner.update_prop("text_size", Box::new(f)).unwrap();
+    self.inner.update_prop("text_size", f).unwrap();
     self
   }
 
@@ -57,7 +57,7 @@ impl Button {
     let string: String = s.into();
     self
       .inner
-      .update_prop("text", Box::new(string))
+      .update_prop("text", string)
       .expect("Couldn't update text");
     self
   }
@@ -69,7 +69,7 @@ impl Button {
     let mut platform_view = self.inner.clone();
     let f = s.for_each(move |string| {
       platform_view
-        .update_prop("text", Box::new(string.clone()))
+        .update_prop("text", string.clone())
         .expect("view is there");
       ready(())
     });
@@ -89,7 +89,7 @@ impl Composable for Button {
   fn compose(&mut self, composer: &mut Composer) {
     if let Some(on_press) = self.on_press.take() {
       info!("REGISTERING in RUST");
-      let cb = Box::new(Some(Callback {
+      let cb: Box<dyn Any + Send> = Box::new(Some(Callback {
         f: Arc::new(on_press),
       }));
       self

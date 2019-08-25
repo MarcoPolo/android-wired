@@ -20,6 +20,7 @@ use {
   discard::DiscardOnDrop,
   futures::future::{BoxFuture, FutureExt},
 };
+use crate::bindings::view_helpers::*;
 
 use crate::bindings::android::callback::Callback;
 
@@ -49,6 +50,48 @@ pub struct Text {
   inner: PlatformView,
   after_remove: Vec<Box<FnOnce()>>,
 }
+
+impl UpdateProp<f32> for Text {
+  fn update_prop(&mut self, k: &str, v: f32) -> Result<(), Box<dyn Error>> {
+    self
+      .inner
+      .update_prop(k, v)?;
+    Ok(())
+  }
+}
+
+impl UpdatePropSignal<f32> for Text {
+  fn update_prop_signal<S>(&mut self, k: &'static str, s: S) -> Result<(), Box<dyn Error>>
+  where
+    S: 'static + Signal<Item = f32> + Send {
+    let mut platform_view = self.inner.clone();
+    let f = s.for_each(move |i| {
+      platform_view
+        .update_prop(k, i)
+        .expect("view is there");
+      ready(())
+    });
+
+    let cancel = spawn_future(f);
+    let handle = DiscardOnDrop::leak(cancel);
+    let cleanup = Box::new(move || {
+      handle.discard();
+    });
+    // DiscardOnDrop::leak(cancel);
+    // let id = AFTER_REMOVE_CALLBACKS.with(move |r| {
+    //   let after_remove = r.borrow_mut();
+    //   // after_remove.push(cleanup);
+    //   after_remove.len()
+    // });
+
+    self.after_remove.push(cleanup);
+    Ok(())
+  }
+}
+
+
+
+impl Padding for Text {}
 
 pub(crate) fn wrap_native_view(g: GlobalRef) -> Arc<Mutex<GlobalRef>> {
   Arc::new(Mutex::new(g))
@@ -91,22 +134,6 @@ impl Text {
     t
   }
 
-  pub fn pad_left(mut self, f: f32) -> Self {
-    self
-      .inner
-      .update_prop("left_pad", Box::new(f))
-      .expect("Couldn't update left padding");
-    self
-  }
-
-  pub fn pad_top(mut self, f: f32) -> Self {
-    self
-      .inner
-      .update_prop("top_pad", Box::new(f))
-      .expect("Couldn't update left padding");
-    self
-  }
-
   pub fn x_pos_signal<S>(mut self, s: S) -> Self
   where
     S: 'static + Signal<Item = f32> + Send,
@@ -114,7 +141,7 @@ impl Text {
     let mut platform_view = self.inner.clone();
     let f = s.for_each(move |i| {
       platform_view
-        .update_prop("set_x", Box::new(i))
+        .update_prop("set_x", i)
         .expect("view is there");
       ready(())
     });
@@ -142,7 +169,7 @@ impl Text {
     let mut platform_view = self.inner.clone();
     let f = s.for_each(move |i| {
       platform_view
-        .update_prop("left_pad", Box::new(i))
+        .update_prop("left_pad", i)
         .expect("view is there");
       ready(())
     });
@@ -170,7 +197,7 @@ impl Text {
     let mut platform_view = self.inner.clone();
     let f = s.for_each(move |string| {
       platform_view
-        .update_prop("text", Box::new(string.clone()))
+        .update_prop("text", string.clone())
         .expect("view is there");
       ready(())
     });
@@ -199,12 +226,12 @@ impl Text {
   pub fn text_mut(&mut self, s: String) {
     self
       .inner
-      .update_prop("text", Box::new(s))
+      .update_prop("text", s)
       .expect("Couldn't update text");
   }
 
   pub fn size_mut(&mut self, f: f32) {
-    self.inner.update_prop("text_size", Box::new(f)).unwrap();
+    self.inner.update_prop("text_size", f).unwrap();
   }
 }
 
@@ -260,7 +287,7 @@ impl StackLayout {
     info!("UPDATING Height!!!");
     self
       .inner
-      .update_prop("height", Box::new(f))
+      .update_prop("height", f)
       .expect("Couldn't update");
     self
   }
@@ -269,7 +296,7 @@ impl StackLayout {
     info!("UPDATING width!!");
     self
       .inner
-      .update_prop("width", Box::new(f))
+      .update_prop("width", f)
       .expect("Couldn't update");
     self
   }
@@ -290,7 +317,7 @@ impl StackLayout {
     info!("UPDATING ORIENTATION!!!");
     self
       .inner
-      .update_prop("orientation", Box::new(string))
+      .update_prop("orientation", string)
       .expect("Couldn't update orientation");
     self
   }
@@ -298,7 +325,7 @@ impl StackLayout {
   pub fn set_x(mut self, f: f32) -> Self {
     self
       .inner
-      .update_prop("set_x", Box::new(f))
+      .update_prop("set_x", f)
       .expect("Couldn't update");
     self
   }
@@ -306,7 +333,7 @@ impl StackLayout {
   pub fn set_y(mut self, f: f32) -> Self {
     self
       .inner
-      .update_prop("set_y", Box::new(f))
+      .update_prop("set_y", f)
       .expect("Couldn't update");
     self
   }
@@ -332,10 +359,25 @@ impl fmt::Debug for WiredNativeView {
   }
 }
 
-impl PlatformViewInner for WiredNativeView {
-  fn update_prop(&mut self, s: &str, mut v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
+impl UpdateProp<f32> for WiredNativeView {
+  fn update_prop(&mut self, s: &str, v: f32) -> Result<(), Box<dyn Error>> {
     let env = self.jvm.get_env()?;
-    if let Some(string) = v.downcast_ref::<String>() {
+      env.call_method(
+        self.native_view.lock().unwrap().as_obj(),
+        "updateProp",
+        "(Ljava/lang/String;F)V",
+        &[
+          JValue::Object(env.new_string(s).unwrap().into()),
+          JValue::Float(v),
+        ],
+      )?;
+      Ok(())
+  }
+}
+
+impl UpdateProp<String> for WiredNativeView {
+  fn update_prop(&mut self, s: &str, string: String) -> Result<(), Box<dyn Error>> {
+    let env = self.jvm.get_env()?;
       env.call_method(
         self.native_view.lock().unwrap().as_obj(),
         "updateProp",
@@ -345,17 +387,14 @@ impl PlatformViewInner for WiredNativeView {
           JValue::Object(env.new_string(&string).unwrap().into()),
         ],
       )?;
-    } else if let Some(float) = v.downcast_ref::<f32>() {
-      env.call_method(
-        self.native_view.lock().unwrap().as_obj(),
-        "updateProp",
-        "(Ljava/lang/String;F)V",
-        &[
-          JValue::Object(env.new_string(s).unwrap().into()),
-          JValue::Float(*float),
-        ],
-      )?;
-    } else if let Some(cb) = v.downcast_mut::<Option<Callback>>() {
+      Ok(())
+  }
+}
+
+impl UpdateProp<Box<dyn Any + Send>> for WiredNativeView {
+  fn update_prop(&mut self, s: &str, mut v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
+    let env = self.jvm.get_env()?;
+    if let Some(cb) = v.downcast_mut::<Option<Callback>>() {
       debug!("Setting callback");
       let view_class = env.find_class("dev/fruit/androiddemo/RustCallback")?;
       let callback_obj = env.new_object(view_class, "()V", &[])?;
@@ -378,6 +417,54 @@ impl PlatformViewInner for WiredNativeView {
     }
     Ok(())
   }
+}
+
+impl PlatformViewInner for WiredNativeView {
+  // fn update_prop(&mut self, s: &str, mut v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
+  //   let env = self.jvm.get_env()?;
+  //   if let Some(string) = v.downcast_ref::<String>() {
+  //     env.call_method(
+  //       self.native_view.lock().unwrap().as_obj(),
+  //       "updateProp",
+  //       "(Ljava/lang/String;Ljava/lang/Object;)V",
+  //       &[
+  //         JValue::Object(env.new_string(s).unwrap().into()),
+  //         JValue::Object(env.new_string(&string).unwrap().into()),
+  //       ],
+  //     )?;
+  //   } else if let Some(float) = v.downcast_ref::<f32>() {
+  //     env.call_method(
+  //       self.native_view.lock().unwrap().as_obj(),
+  //       "updateProp",
+  //       "(Ljava/lang/String;F)V",
+  //       &[
+  //         JValue::Object(env.new_string(s).unwrap().into()),
+  //         JValue::Float(*float),
+  //       ],
+  //     )?;
+  //   } else if let Some(cb) = v.downcast_mut::<Option<Callback>>() {
+  //     debug!("Setting callback");
+  //     let view_class = env.find_class("dev/fruit/androiddemo/RustCallback")?;
+  //     let callback_obj = env.new_object(view_class, "()V", &[])?;
+  //     let cb: Callback = cb.take().expect("No Callback?");
+
+  //     debug!("Set obj");
+  //     env.set_rust_field(callback_obj, "ptr", cb)?;
+
+  //     env.call_method(
+  //       self.native_view.lock().unwrap().as_obj(),
+  //       "updateProp",
+  //       "(Ljava/lang/String;Ldev/fruit/androiddemo/RustCallback;)V",
+  //       &[
+  //         JValue::Object(env.new_string(s).unwrap().into()),
+  //         JValue::Object(callback_obj),
+  //       ],
+  //     )?;
+  //   } else {
+  //     info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!               COULDN'T UPDATE");
+  //   }
+  //   Ok(())
+  // }
   /// If you append a child that is attached somewhere else, you should move the child.
   fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
     let env = self.jvm.get_env()?;
@@ -510,7 +597,7 @@ impl PhysicsLayout {
     let string: String = o.to_string();
     self
       .inner
-      .update_prop("orientation", Box::new(string))
+      .update_prop("orientation", string)
       .expect("Couldn't update orientation");
     self
   }
@@ -519,7 +606,7 @@ impl PhysicsLayout {
     info!("UPDATING Height!!!");
     self
       .inner
-      .update_prop("height", Box::new(f))
+      .update_prop("height", f)
       .expect("Couldn't update");
     self
   }
@@ -528,7 +615,7 @@ impl PhysicsLayout {
     info!("UPDATING width!!");
     self
       .inner
-      .update_prop("width", Box::new(f))
+      .update_prop("width", f)
       .expect("Couldn't update");
     self
   }

@@ -2,6 +2,7 @@
 use crate::ui_tree::{
   spawn_future, with_parent, Composable, Composer, PlatformView, PlatformViewInner,
 };
+use crate::bindings::view_helpers::*;
 use discard::DiscardOnDrop;
 use futures::future::ready;
 use futures_signals::signal::{Signal, SignalExt};
@@ -104,7 +105,7 @@ impl Text {
     t.underlying_view
       .as_mut()
       .unwrap()
-      .update_prop("text", Box::new(text.into()))
+      .update_prop("text", text.into())
       .unwrap();
     t
   }
@@ -115,8 +116,9 @@ impl Text {
   {
     let mut platform_view = self.underlying_view.clone().unwrap();
     let f = s.for_each(move |string| {
+      let any: Box<dyn Any + Send> = Box::new(string.clone());
       platform_view
-        .update_prop("text", Box::new(string.clone()))
+        .update_prop("text", any)
         .expect("view is there");
       ready(())
     });
@@ -137,6 +139,35 @@ impl Text {
   }
 }
 
+impl UpdateProp<String> for DummyPlatformView {
+  fn update_prop(&mut self, s: &str, v: String) -> Result<(), Box<dyn Error>> {
+    let any: Box<dyn Any + Send> = Box::new(v);
+    self.update_prop(s, any)?;
+    Ok(())
+  }
+}
+
+impl UpdateProp<f32> for DummyPlatformView {
+  fn update_prop(&mut self, s: &str, v: f32) -> Result<(), Box<dyn Error>> {
+    let any: Box<dyn Any + Send> = Box::new(v);
+    self.update_prop(s, any)?;
+    Ok(())
+  }
+}
+
+impl UpdateProp<Box<dyn Any + Send>> for DummyPlatformView {
+  fn update_prop(&mut self, s: &str, v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
+    println!("Updating {} on {:?} with {:?}", s, self, &v);
+    let mut props = self.props.lock().unwrap();
+    if let Some(i) = props.iter().position(|(p, _)| p == s) {
+      props[i] = (s.into(), v);
+    } else {
+      props.push((s.into(), v));
+    }
+    Ok(())
+  }
+}
+
 impl PlatformViewInner for DummyPlatformView {
   // fn update_prop_string(&mut self, s: &str, v: String) -> Result<(), Box<dyn Error>> {
   //   println!("Updating {} on {:?} with {:?}", s, self, &v);
@@ -149,16 +180,16 @@ impl PlatformViewInner for DummyPlatformView {
   //   Ok(())
   // }
 
-  fn update_prop(&mut self, s: &str, v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
-    println!("Updating {} on {:?} with {:?}", s, self, &v);
-    let mut props = self.props.lock().unwrap();
-    if let Some(i) = props.iter().position(|(p, _)| p == s) {
-      props[i] = (s.into(), v);
-    } else {
-      props.push((s.into(), v));
-    }
-    Ok(())
-  }
+  // fn update_prop(&mut self, s: &str, v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
+  //   println!("Updating {} on {:?} with {:?}", s, self, &v);
+  //   let mut props = self.props.lock().unwrap();
+  //   if let Some(i) = props.iter().position(|(p, _)| p == s) {
+  //     props[i] = (s.into(), v);
+  //   } else {
+  //     props.push((s.into(), v));
+  //   }
+  //   Ok(())
+  // }
   /// If you append a child that is attached somewhere else, you should move the child.
   fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
     println!("Appending Child {:?} to {:?}", c, self);
@@ -241,7 +272,7 @@ where
     let mut platform_view = self.platform_view.clone();
     let f = s.for_each(move |i| {
       platform_view
-        .update_prop("label", Box::new(i.clone()))
+        .update_prop("label", i.clone())
         .expect("view is there");
       ready(())
     });
@@ -253,7 +284,7 @@ where
   pub fn label(&mut self, label: String) {
     self
       .platform_view
-      .update_prop("label", Box::new(label.clone()))
+      .update_prop("label", label.clone())
       .unwrap();
     self.label = Some(label)
   }

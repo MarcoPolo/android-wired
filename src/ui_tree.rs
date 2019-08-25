@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use discard::DiscardOnDrop;
 use futures::executor::{LocalPool, LocalSpawner};
+use crate::bindings::view_helpers::*;
 use futures::prelude::*;
 use futures::task::LocalSpawnExt;
 use futures_signals::{cancelable_future, CancelableFutureHandle};
@@ -50,8 +51,7 @@ impl PlatformView {
 }
 
 // pub trait Prop: Debug + Any {}
-pub trait PlatformViewInner: Debug + Send {
-  fn update_prop(&mut self, s: &str, v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>>;
+pub trait PlatformViewInner: UpdateProp<String> + UpdateProp<f32> + UpdateProp<Box<dyn Any + Send>> + Debug + Send {
   /// If you append a child that is attached somewhere else, you should move the child.
   fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>>;
   /// Do not insert a child that is already there! undefined behavior!
@@ -317,10 +317,28 @@ impl Debug for PlatformView {
   }
 }
 
-impl PlatformViewInner for PlatformView {
+impl UpdateProp<f32> for PlatformView {
+  fn update_prop(&mut self, s: &str, v: f32) -> Result<(), Box<dyn Error>> {
+    self.underlying_view.lock().unwrap().update_prop(s, v)
+  }
+}
+
+impl UpdateProp<String> for PlatformView {
+  fn update_prop(&mut self, s: &str, v: String) -> Result<(), Box<dyn Error>> {
+    self.underlying_view.lock().unwrap().update_prop(s, v)
+  }
+}
+
+impl UpdateProp<Box<dyn Any + Send>> for PlatformView {
   fn update_prop(&mut self, s: &str, v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
     self.underlying_view.lock().unwrap().update_prop(s, v)
   }
+}
+
+impl PlatformViewInner for PlatformView {
+  // fn update_prop(&mut self, s: &str, v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
+  //   self.underlying_view.lock().unwrap().update_prop(s, v)
+  // }
   /// If you append a child that is attached somewhere else, you should move the child.
   fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
     self.underlying_view.lock().unwrap().append_child(c)
