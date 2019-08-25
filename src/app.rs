@@ -32,12 +32,12 @@ pub fn main() -> StackLayout {
         Text::new("Number is even!");
       }
     });
-    Marquee("WEEE").size(22.0);
+    marquee("WEEE").size(22.0);
     Text::new("This is some other message").size(22.0);
   })
 }
 
-fn Marquee<S>(text: S) -> Text
+fn marquee<S>(text: S) -> Text
 where
   S: Into<String>,
 {

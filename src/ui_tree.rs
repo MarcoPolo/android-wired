@@ -19,8 +19,7 @@ thread_local! {
     static SPAWNER: RefCell<LocalSpawner> = RefCell::new({
       EXECUTOR.with(|executor| {
         let executor = executor.borrow();
-        let spawner = executor.spawner();
-        spawner
+        executor.spawner()
       })
     });
 
@@ -377,14 +376,13 @@ mod tests {
   use super::*;
   use crate::bindings::test::*;
   use crate::helpers::if_signal;
-  use futures::future::ready;
-  use futures_timer::{Delay, Interval};
-  use std::panic::{catch_unwind, RefUnwindSafe, UnwindSafe};
-  use std::rc::Rc;
-  use std::time::Duration;
+  // use futures::future::ready;
+  // use futures_timer::{Delay, Interval};
+  // use std::panic::{catch_unwind, RefUnwindSafe, UnwindSafe};
+  // use std::rc::Rc;
+  // use std::time::Duration;
 
-  use futures_signals::signal::{Mutable, Signal, SignalExt};
-  use futures_signals::signal_vec::{MutableVec, SignalVecExt};
+  use futures_signals::signal::{Mutable, SignalExt};
 
   use simple_logger;
 
@@ -520,52 +518,4 @@ mod tests {
 
   #[test]
   fn test_use_state() {}
-
-  pub fn demo() {
-    let mut composer = Composer::new();
-
-    let my_state = Mutable::new(5);
-
-    let my_state_clone = my_state.clone();
-    let mut button = Button::new(move || {
-      let mut lock = my_state_clone.lock_mut();
-      *lock += 1;
-    })
-    .watch_label(my_state.signal().map(|n| format!("Counter is: {}", n)));
-
-    // Style A
-    {
-      let root = StackLayout::new().with(|| {
-        Text::new("Hello World");
-        button;
-
-        let my_vec: MutableVec<u32> = MutableVec::new_with_values(vec![1, 2, 3]);
-        let f = my_vec.signal_vec().for_each(|change| {
-          println!("Here in signal vec with {:?}", change);
-          // Text::new(format!("Hello no.{}!", i)).compose(composer);
-          ready(())
-        });
-        composer.spawn(Box::new(f));
-      });
-    }
-
-    let my_state_clone = my_state.clone();
-    let f = Interval::new(Duration::from_secs(1))
-      .take(5)
-      .for_each(move |_| {
-        println!("Pressing Button");
-        // button.press();
-        ready(())
-      });
-
-    let cancel = spawn_future(f);
-
-    EXECUTOR.with(|executor| {
-      let mut executor = executor.borrow_mut();
-      executor
-        .run_until(Delay::new(Duration::from_secs(5)))
-        .unwrap();
-    })
-  }
-
 }

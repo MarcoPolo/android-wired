@@ -1,8 +1,9 @@
 pub mod button;
 use crate::android_executor::spawn_future;
 use crate::style;
-#[macro_use]
-use crate::ui_tree::{Composable, Composer, PlatformView, PlatformViewInner, COMPOSER, with_parent};
+use crate::ui_tree::{
+  with_parent, Composable, Composer, PlatformView, PlatformViewInner, COMPOSER,
+};
 use discard::Discard;
 use futures::future::ready;
 use futures_signals::signal::{Mutable, Signal, SignalExt};
@@ -380,15 +381,7 @@ impl PlatformViewInner for WiredNativeView {
   /// If you append a child that is attached somewhere else, you should move the child.
   fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
     let env = self.jvm.get_env()?;
-    {
-      let kind = c
-        .get_raw_view()?
-        .lock()
-        .unwrap()
-        .downcast_ref::<GlobalRef>()
-        .expect("here");
-      info!("Appending {} ", self.kind);
-    }
+    info!("Appending {} ", self.kind);
     env.call_method(
       self.native_view.lock().unwrap().as_obj(),
       "appendChild",

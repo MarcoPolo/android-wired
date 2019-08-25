@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use {
   discard::DiscardOnDrop,
   futures::{
@@ -6,17 +7,15 @@ use {
   },
   futures_signals::{cancelable_future, CancelableFutureHandle},
   jni::{
-    objects::{GlobalRef, JClass, JObject, JString, JValue},
-    JNIEnv, JavaVM,
+    objects::{JClass, JObject, JString, JValue},
+    JNIEnv,
   },
   std::{
     cell::RefCell,
     future::Future,
-    panic::{catch_unwind, RefUnwindSafe, UnwindSafe},
     sync::mpsc::{sync_channel, Receiver, SyncSender},
     sync::{Arc, Mutex, MutexGuard},
     task::{Context, Poll},
-    time::Duration,
   },
 };
 
@@ -61,10 +60,10 @@ pub struct AndroidExecutor {
 pub unsafe extern "C" fn Java_dev_fruit_androiddemo_Executor_setup(
   env: JNIEnv,
   _class: JClass,
-  executorRef: JObject,
+  executor_ref: JObject,
 ) {
   let (executor, spawner) = new_executor_and_spawner();
-  env.set_rust_field(executorRef, "ptr", executor).unwrap();
+  env.set_rust_field(executor_ref, "ptr", executor).unwrap();
 
   SPAWNER.with(|s| {
     s.borrow_mut().replace(spawner);
@@ -75,9 +74,9 @@ pub unsafe extern "C" fn Java_dev_fruit_androiddemo_Executor_setup(
 pub unsafe extern "C" fn Java_dev_fruit_androiddemo_Executor_recv(
   env: JNIEnv,
   _class: JClass,
-  executorRef: JObject,
+  executor_ref: JObject,
 ) {
-  let mut executor: MutexGuard<AndroidExecutor> = env.get_rust_field(executorRef, "ptr").unwrap();
+  let mut executor: MutexGuard<AndroidExecutor> = env.get_rust_field(executor_ref, "ptr").unwrap();
   info!("Waiting for task");
 
   if let Ok(task) = executor.ready_queue.recv() {
@@ -93,10 +92,10 @@ pub unsafe extern "C" fn Java_dev_fruit_androiddemo_Executor_poll(
   env: JNIEnv,
   _class: JClass,
 
-  executorRef: JObject,
+  executor_ref: JObject,
 ) {
   info!("Starting poll");
-  let mut executor: MutexGuard<AndroidExecutor> = env.get_rust_field(executorRef, "ptr").unwrap();
+  let executor: MutexGuard<AndroidExecutor> = env.get_rust_field(executor_ref, "ptr").unwrap();
   let task = executor.staging_task.lock().unwrap().take();
   if let Some(task) = task {
     let mut future_slot = task.future.lock().unwrap();
@@ -181,24 +180,23 @@ impl Spawner {
     debug!("running task first");
     let mut already_done = false;
     {
-
-    let mut future_slot = task.future.lock().unwrap();
-    if let Some(mut future) = future_slot.take() {
-      // Create a `LocalWaker` from the task itself
-      let waker = waker_ref(&task);
-      let context = &mut Context::from_waker(&*waker);
-      // `BoxFuture<T>` is a type alias for
-      // `Pin<Box<dyn Future<Output = T> + Send + 'static>>`.
-      // We can get a `Pin<&mut dyn Future + Send + 'static>`
-      // from it by calling the `Pin::as_mut` method.
-      if let Poll::Pending = future.as_mut().poll(context) {
-        // We're not done processing the future, so put it
-        // back in its task to be run again in the future.
-        *future_slot = Some(future);
-      } else {
-        already_done = true;
+      let mut future_slot = task.future.lock().unwrap();
+      if let Some(mut future) = future_slot.take() {
+        // Create a `LocalWaker` from the task itself
+        let waker = waker_ref(&task);
+        let context = &mut Context::from_waker(&*waker);
+        // `BoxFuture<T>` is a type alias for
+        // `Pin<Box<dyn Future<Output = T> + Send + 'static>>`.
+        // We can get a `Pin<&mut dyn Future + Send + 'static>`
+        // from it by calling the `Pin::as_mut` method.
+        if let Poll::Pending = future.as_mut().poll(context) {
+          // We're not done processing the future, so put it
+          // back in its task to be run again in the future.
+          *future_slot = Some(future);
+        } else {
+          already_done = true;
+        }
       }
-    }
     }
     if !already_done {
       self.task_sender.send(task).expect("too many tasks queued");

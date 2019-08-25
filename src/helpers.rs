@@ -4,11 +4,10 @@ use crate::android_executor::spawn_future;
 use crate::ui_tree::spawn_future;
 #[cfg(not(test))]
 use crate::ui_tree::spawn_future;
-use crate::ui_tree::{Composable, Composer, PlatformView, PlatformViewInner, COMPOSER};
+use crate::ui_tree::{Composer, COMPOSER};
 use discard::DiscardOnDrop;
 use futures::future::ready;
 use futures_signals::signal::{Mutable, ReadOnlyMutable, Signal, SignalExt};
-use std::borrow::BorrowMut;
 
 pub fn if_signal<S, F>(s: S, f: F)
 where

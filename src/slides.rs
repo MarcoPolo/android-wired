@@ -1,14 +1,8 @@
 #![allow(dead_code)]
-use crate::android_executor::spawn_future;
 use crate::bindings::android::views::*;
-use crate::helpers::{if_signal, match_signal};
+use crate::helpers::match_signal;
 use crate::style::Orientation;
-use discard::DiscardOnDrop;
-use futures::future::ready;
-use futures::prelude::*;
-use futures_signals::signal::{Mutable, Signal, SignalExt};
-use futures_timer::{Delay, Interval};
-use std::time::Duration;
+use futures_signals::signal::Mutable;
 
 fn build_slides() -> Vec<BasicSlideInfo> {
   (vec![
@@ -58,7 +52,7 @@ pub fn main() {
   PhysicsLayout::new()
     .with(move || {
       match_signal(slide_sig, move |slide_idx| {
-        BasicSlide(&slides[(slide_idx % slides.len())]);
+        basic_slide(&slides[(slide_idx % slides.len())]);
       });
       StackLayout::new()
         .with(|| {
@@ -72,7 +66,7 @@ pub fn main() {
     .width(1080.0);
 }
 
-fn BasicSlide(info: &BasicSlideInfo) {
+fn basic_slide(info: &BasicSlideInfo) {
   Text::new(info.title)
     .size(32.0)
     .pad_left(20.0)

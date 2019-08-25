@@ -1,12 +1,15 @@
-use crate::ui_tree::{PlatformView, PlatformViewInner, with_parent, Composer, Composable, spawn_future};
-use futures::future::ready;
+#![allow(dead_code)]
+use crate::ui_tree::{
+  spawn_future, with_parent, Composable, Composer, PlatformView, PlatformViewInner,
+};
 use discard::DiscardOnDrop;
-use std::fmt::{Debug, Formatter};
-use std::sync::{Arc, Mutex};
+use futures::future::ready;
+use futures_signals::signal::{Signal, SignalExt};
+use futures_signals::CancelableFutureHandle;
 use std::any::Any;
 use std::error::Error;
-use futures_signals::signal::{Signal, SignalExt};
-use futures_signals::{CancelableFutureHandle};
+use std::fmt::{Debug, Formatter};
+use std::sync::{Arc, Mutex};
 
 pub struct StackLayout {
   pub underlying_view: PlatformView,
@@ -26,10 +29,11 @@ impl StackLayout {
   }
 }
 
+type DummyProps = Arc<Mutex<Vec<(String, Box<dyn Any + Send>)>>>;
 #[derive(Clone)]
 pub struct DummyPlatformView {
   el_type: &'static str,
-  props: Arc<Mutex<Vec<(String, Box<dyn Any + Send>)>>>,
+  props: DummyProps,
   children: Vec<PlatformView>,
   raw_view: Arc<Mutex<dyn Any + Send>>,
 }
