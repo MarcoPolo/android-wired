@@ -48,7 +48,7 @@ thread_local! {
 
 pub struct Text {
   inner: PlatformView,
-  after_remove: Vec<Box<FnOnce()>>,
+  after_remove: Vec<Box<dyn FnOnce()>>,
 }
 
 impl UpdateProp<f32> for Text {

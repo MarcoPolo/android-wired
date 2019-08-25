@@ -1,8 +1,6 @@
 #[cfg(target_os = "android")]
 use crate::android_executor::spawn_future;
-#[cfg(test)]
-use crate::ui_tree::spawn_future;
-#[cfg(not(test))]
+#[cfg(not(target_os = "android"))]
 use crate::ui_tree::spawn_future;
 use crate::ui_tree::{Composer, COMPOSER};
 use discard::DiscardOnDrop;

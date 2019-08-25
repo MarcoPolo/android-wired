@@ -110,7 +110,7 @@ pub unsafe extern "C" fn Java_dev_fruit_androiddemo_MainActivity_init(
             .new_global_ref(view_factory)
             .expect("Creating global ref should work");
 
-        let root_View = env
+        let root_view = env
             .new_global_ref(root_view)
             .expect("Creating global ref should work");
 
@@ -120,16 +120,16 @@ pub unsafe extern "C" fn Java_dev_fruit_androiddemo_MainActivity_init(
             *view_factory_ref.borrow_mut() = Some(views::ViewFactory::new(view_factory, jvm));
         });
 
-        let root_View = android::views::WiredNativeView {
+        let root_view = android::views::WiredNativeView {
             kind: "StackLayout",
             jvm: jvm_clone,
-            native_view: android::views::wrap_native_view(root_View),
+            native_view: android::views::wrap_native_view(root_view),
         };
-        ui_tree::set_root_view(PlatformView::new(root_View));
-        let app_root = slides::main();
+        ui_tree::set_root_view(PlatformView::new(root_view));
+        let _app_root = slides::main();
 
         // env.call_method(
-        //     root_View.as_obj(),
+        //     root_view.as_obj(),
         //     "appendChild",
         //     "(Ldev/fruit/androiddemo/WiredPlatformView;)V",
         //     &[JValue::Object(app_root.get_native_view().unwrap().as_obj())],

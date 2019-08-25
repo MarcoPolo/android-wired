@@ -325,8 +325,8 @@ class WiredTextView(val mContext: Context): TextView(mContext), WiredPlatformVie
     override fun updateProp(k: String, v: Float) {
         when (k) {
             "text_size" -> textSize = v
-            "left_pad" -> setPadding(v.toInt(), paddingTop, paddingRight, paddingBottom)
-            "top_pad" -> setPadding(paddingLeft, v.toInt(), paddingRight, paddingBottom)
+            "pad_left" -> setPadding(v.toInt(), paddingTop, paddingRight, paddingBottom)
+            "pad_top" -> setPadding(paddingLeft, v.toInt(), paddingRight, paddingBottom)
             "set_x" -> x = v
             "set_y" -> y = v
         }
