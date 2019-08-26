@@ -4,35 +4,17 @@ use crate::bindings::callback::Callback;
 #[derive(UpdateProp)]
 pub struct Button {
   inner: PlatformView,
-  on_press: Option<Box<dyn Fn() + Send + Sync>>,
   after_remove: AttachedFutures,
+  on_press: Option<Box<dyn Fn() + Send + Sync>>,
 }
 
 impl Default for Button {
   fn default() -> Self {
-    VIEWFACTORY.with(|view_factory| {
-      let mut view_factory_ref = view_factory.borrow_mut();
-      let view_factory = view_factory_ref.as_mut().expect("No View Factory");
-      let env = view_factory.jvm.get_env().expect("Couldn't get env");
-      let native_view = env
-        .call_method(
-          view_factory.inner.as_obj(),
-          "createBtnView",
-          "()Ldev/fruit/androiddemo/WiredPlatformView;",
-          &[],
-        )
-        .unwrap();
-      let wired_native_view = WiredNativeView {
-        kind: "Button",
-        jvm: view_factory.jvm.clone(),
-        native_view: wrap_native_view(env.new_global_ref(native_view.l().unwrap()).unwrap()),
-      };
-      Button {
-        inner: PlatformView::new(wired_native_view),
-        after_remove: vec![],
-        on_press: None,
-      }
-    })
+    Button {
+      inner: PlatformView::new(create_wired_native_view("BtnView")),
+      after_remove: vec![],
+      on_press: None,
+    }
   }
 }
 
