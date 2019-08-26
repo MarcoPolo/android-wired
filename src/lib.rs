@@ -40,6 +40,9 @@ pub mod style;
 mod slides;
 
 #[macro_use]
+extern crate update_prop_derive;
+
+#[macro_use]
 extern crate log;
 #[cfg(target_os = "android")]
 extern crate android_logger;

@@ -27,6 +27,10 @@ use crate::bindings::callback::Callback;
 pub use button::Button;
 pub use wired_native_view::WiredNativeView;
 
+thread_local! {
+    pub static VIEWFACTORY: RefCell<Option<ViewFactory>> = RefCell::new(None);
+}
+
 auto_compose!(PhysicsLayout);
 auto_compose!(StackLayout);
 auto_compose!(Text);
@@ -43,59 +47,12 @@ impl ViewFactory {
   }
 }
 
-thread_local! {
-    pub static VIEWFACTORY: RefCell<Option<ViewFactory>> = RefCell::new(None);
-}
-
+// UpdateProp is not a very well designed macro. See the macro def for how it works
+// tl;dr it relies on the inner: PlatformView and after_remove: AttachedFutures fields.
+#[derive(UpdateProp)]
 pub struct Text {
   inner: PlatformView,
   after_remove: AttachedFutures,
-}
-
-impl UpdateProp<f32> for Text {
-  fn update_prop(&mut self, k: &str, v: f32) -> Result<(), Box<dyn Error>> {
-    self.inner.update_prop(k, v)?;
-    Ok(())
-  }
-}
-
-impl UpdatePropSignal<f32> for Text {
-  fn update_prop_signal<S>(&mut self, k: &'static str, s: S) -> Result<(), Box<dyn Error>>
-  where
-    S: 'static + Signal<Item = f32> + Send,
-  {
-    let mut platform_view = self.inner.clone();
-    let f = s.for_each(move |i| {
-      platform_view.update_prop(k, i).expect("view is there");
-      ready(())
-    });
-
-    self.after_remove.push(spawn_future(f));
-    Ok(())
-  }
-}
-
-impl UpdateProp<String> for Text {
-  fn update_prop(&mut self, k: &str, v: String) -> Result<(), Box<dyn Error>> {
-    self.inner.update_prop(k, v)?;
-    Ok(())
-  }
-}
-
-impl UpdatePropSignal<String> for Text {
-  fn update_prop_signal<S>(&mut self, k: &'static str, s: S) -> Result<(), Box<dyn Error>>
-  where
-    S: 'static + Signal<Item = String> + Send,
-  {
-    let mut platform_view = self.inner.clone();
-    let f = s.for_each(move |i| {
-      platform_view.update_prop(k, i).expect("view is there");
-      ready(())
-    });
-
-    self.after_remove.push(spawn_future(f));
-    Ok(())
-  }
 }
 
 pub(crate) fn wrap_native_view(g: GlobalRef) -> Arc<Mutex<GlobalRef>> {
@@ -157,6 +114,7 @@ impl Composable for Text {
   }
 }
 
+#[derive(UpdateProp)]
 pub struct StackLayout {
   pub(crate) inner: PlatformView,
   after_remove: AttachedFutures,
@@ -181,36 +139,6 @@ impl Default for StackLayout {
   }
 }
 
-impl UpdateProp<String> for StackLayout {
-  fn update_prop(&mut self, k: &str, v: String) -> Result<(), Box<dyn Error>> {
-    self.inner.update_prop(k, v)?;
-    Ok(())
-  }
-}
-
-impl UpdateProp<f32> for StackLayout {
-  fn update_prop(&mut self, k: &str, v: f32) -> Result<(), Box<dyn Error>> {
-    self.inner.update_prop(k, v)?;
-    Ok(())
-  }
-}
-
-impl UpdatePropSignal<f32> for StackLayout {
-  fn update_prop_signal<S>(&mut self, k: &'static str, s: S) -> Result<(), Box<dyn Error>>
-  where
-    S: 'static + Signal<Item = f32> + Send,
-  {
-    let mut platform_view = self.inner.clone();
-    let f = s.for_each(move |i| {
-      platform_view.update_prop(k, i).expect("view is there");
-      ready(())
-    });
-
-    self.after_remove.push(spawn_future(f));
-    Ok(())
-  }
-}
-
 impl ParentWith for StackLayout {
   fn with<F>(mut self, f: F) -> Self
   where
@@ -232,6 +160,7 @@ impl StackLayout {
 
 // Physics layout
 
+#[derive(UpdateProp)]
 pub struct PhysicsLayout {
   pub(crate) inner: PlatformView,
   after_remove: AttachedFutures,
@@ -264,37 +193,6 @@ impl ParentWith for PhysicsLayout {
   }
 }
 
-
-impl UpdateProp<String> for PhysicsLayout {
-  fn update_prop(&mut self, k: &str, v: String) -> Result<(), Box<dyn Error>> {
-    self.inner.update_prop(k, v)?;
-    Ok(())
-  }
-}
-
-impl UpdateProp<f32> for PhysicsLayout {
-  fn update_prop(&mut self, k: &str, v: f32) -> Result<(), Box<dyn Error>> {
-    self.inner.update_prop(k, v)?;
-    Ok(())
-  }
-}
-
-impl UpdatePropSignal<f32> for PhysicsLayout {
-  fn update_prop_signal<S>(&mut self, k: &'static str, s: S) -> Result<(), Box<dyn Error>>
-  where
-    S: 'static + Signal<Item = f32> + Send,
-  {
-    let mut platform_view = self.inner.clone();
-    let f = s.for_each(move |i| {
-      platform_view.update_prop(k, i).expect("view is there");
-      ready(())
-    });
-
-    self.after_remove.push(spawn_future(f));
-    Ok(())
-  }
-}
-
 impl PhysicsLayout {
   pub fn new() -> Self {
     PhysicsLayout {
@@ -307,81 +205,56 @@ impl PhysicsLayout {
 mod wired_native_view {
   use super::*;
 
-pub struct WiredNativeView {
-  pub kind: &'static str,
-  pub jvm: Arc<JavaVM>,
-  pub native_view: Arc<Mutex<GlobalRef>>,
-}
-
-impl fmt::Debug for WiredNativeView {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "WiredNativeView [{}]", self.kind)
+  pub struct WiredNativeView {
+    pub kind: &'static str,
+    pub jvm: Arc<JavaVM>,
+    pub native_view: Arc<Mutex<GlobalRef>>,
   }
-}
 
-impl UpdateProp<f32> for WiredNativeView {
-  fn update_prop(&mut self, s: &str, v: f32) -> Result<(), Box<dyn Error>> {
-    let env = self.jvm.get_env()?;
-    env.call_method(
-      self.native_view.lock().unwrap().as_obj(),
-      "updateProp",
-      "(Ljava/lang/String;F)V",
-      &[
-        JValue::Object(env.new_string(s).unwrap().into()),
-        JValue::Float(v),
-      ],
-    )?;
-    Ok(())
+  impl fmt::Debug for WiredNativeView {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      write!(f, "WiredNativeView [{}]", self.kind)
+    }
   }
-}
 
-impl UpdateProp<String> for WiredNativeView {
-  fn update_prop(&mut self, s: &str, string: String) -> Result<(), Box<dyn Error>> {
-    let env = self.jvm.get_env()?;
-    env.call_method(
-      self.native_view.lock().unwrap().as_obj(),
-      "updateProp",
-      "(Ljava/lang/String;Ljava/lang/String;)V",
-      &[
-        JValue::Object(env.new_string(s).unwrap().into()),
-        JValue::Object(env.new_string(&string).unwrap().into()),
-      ],
-    )?;
-    Ok(())
+  impl UpdateProp<f32> for WiredNativeView {
+    fn update_prop(&mut self, s: &str, v: f32) -> Result<(), Box<dyn Error>> {
+      let env = self.jvm.get_env()?;
+      env.call_method(
+        self.native_view.lock().unwrap().as_obj(),
+        "updateProp",
+        "(Ljava/lang/String;F)V",
+        &[
+          JValue::Object(env.new_string(s).unwrap().into()),
+          JValue::Float(v),
+        ],
+      )?;
+      Ok(())
+    }
   }
-}
 
-impl UpdateProp<Callback> for WiredNativeView {
-  fn update_prop(&mut self, s: &str, cb: Callback) -> Result<(), Box<dyn Error>> {
-    let env = self.jvm.get_env()?;
-    debug!("Setting callback");
-    let view_class = env.find_class("dev/fruit/androiddemo/RustCallback")?;
-    let callback_obj = env.new_object(view_class, "()V", &[])?;
-    env.set_rust_field(callback_obj, "ptr", cb)?;
-
-    env.call_method(
-      self.native_view.lock().unwrap().as_obj(),
-      "updateProp",
-      "(Ljava/lang/String;Ldev/fruit/androiddemo/RustCallback;)V",
-      &[
-        JValue::Object(env.new_string(s).unwrap().into()),
-        JValue::Object(callback_obj),
-      ],
-    )?;
-    Ok(())
+  impl UpdateProp<String> for WiredNativeView {
+    fn update_prop(&mut self, s: &str, string: String) -> Result<(), Box<dyn Error>> {
+      let env = self.jvm.get_env()?;
+      env.call_method(
+        self.native_view.lock().unwrap().as_obj(),
+        "updateProp",
+        "(Ljava/lang/String;Ljava/lang/String;)V",
+        &[
+          JValue::Object(env.new_string(s).unwrap().into()),
+          JValue::Object(env.new_string(&string).unwrap().into()),
+        ],
+      )?;
+      Ok(())
+    }
   }
-}
 
-impl UpdateProp<Box<dyn Any + Send>> for WiredNativeView {
-  fn update_prop(&mut self, s: &str, mut v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
-    let env = self.jvm.get_env()?;
-    if let Some(cb) = v.downcast_mut::<Option<Callback>>() {
+  impl UpdateProp<Callback> for WiredNativeView {
+    fn update_prop(&mut self, s: &str, cb: Callback) -> Result<(), Box<dyn Error>> {
+      let env = self.jvm.get_env()?;
       debug!("Setting callback");
       let view_class = env.find_class("dev/fruit/androiddemo/RustCallback")?;
       let callback_obj = env.new_object(view_class, "()V", &[])?;
-      let cb: Callback = cb.take().expect("No Callback?");
-
-      debug!("Set obj");
       env.set_rust_field(callback_obj, "ptr", cb)?;
 
       env.call_method(
@@ -393,86 +266,111 @@ impl UpdateProp<Box<dyn Any + Send>> for WiredNativeView {
           JValue::Object(callback_obj),
         ],
       )?;
-    } else {
-      info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!               COULDN'T UPDATE");
+      Ok(())
     }
-    Ok(())
   }
-}
 
-impl PlatformViewInner for WiredNativeView {
-  /// If you append a child that is attached somewhere else, you should move the child.
-  fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
-    let env = self.jvm.get_env()?;
-    info!("Appending {} ", self.kind);
-    env.call_method(
-      self.native_view.lock().unwrap().as_obj(),
-      "appendChild",
-      "(Ldev/fruit/androiddemo/WiredPlatformView;)V",
-      &[JValue::Object(
-        c.get_raw_view()?
-          .lock()
-          .unwrap()
-          .downcast_ref::<GlobalRef>()
-          .expect("Not a Wired NativeView ref")
-          .as_obj(),
-      )],
-    )?;
-    Ok(())
+  impl UpdateProp<Box<dyn Any + Send>> for WiredNativeView {
+    fn update_prop(&mut self, s: &str, mut v: Box<dyn Any + Send>) -> Result<(), Box<dyn Error>> {
+      let env = self.jvm.get_env()?;
+      if let Some(cb) = v.downcast_mut::<Option<Callback>>() {
+        debug!("Setting callback");
+        let view_class = env.find_class("dev/fruit/androiddemo/RustCallback")?;
+        let callback_obj = env.new_object(view_class, "()V", &[])?;
+        let cb: Callback = cb.take().expect("No Callback?");
+
+        debug!("Set obj");
+        env.set_rust_field(callback_obj, "ptr", cb)?;
+
+        env.call_method(
+          self.native_view.lock().unwrap().as_obj(),
+          "updateProp",
+          "(Ljava/lang/String;Ldev/fruit/androiddemo/RustCallback;)V",
+          &[
+            JValue::Object(env.new_string(s).unwrap().into()),
+            JValue::Object(callback_obj),
+          ],
+        )?;
+      } else {
+        info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!               COULDN'T UPDATE");
+      }
+      Ok(())
+    }
   }
-  /// Do not insert a child that is already there! undefined behavior!
-  fn insert_child_at(&mut self, c: &PlatformView, idx: usize) -> Result<(), Box<dyn Error>> {
-    let env = self.jvm.get_env()?;
-    env.call_method(
-      self.native_view.lock().unwrap().as_obj(),
-      "insertChildAt",
-      "(Ldev/fruit/androiddemo/WiredPlatformView;I)V",
-      &[
-        JValue::Object(
+
+  impl PlatformViewInner for WiredNativeView {
+    /// If you append a child that is attached somewhere else, you should move the child.
+    fn append_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
+      let env = self.jvm.get_env()?;
+      info!("Appending {} ", self.kind);
+      env.call_method(
+        self.native_view.lock().unwrap().as_obj(),
+        "appendChild",
+        "(Ldev/fruit/androiddemo/WiredPlatformView;)V",
+        &[JValue::Object(
           c.get_raw_view()?
             .lock()
             .unwrap()
             .downcast_ref::<GlobalRef>()
             .expect("Not a Wired NativeView ref")
             .as_obj(),
-        ),
-        JValue::Int(idx as i32),
-      ],
-    )?;
-    Ok(())
-  }
-  /// should not tear down the child! since it may be placed somewhere else later
-  fn remove_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
-    let env = self.jvm.get_env()?;
-    env.call_method(
-      self.native_view.lock().unwrap().as_obj(),
-      "removeChild",
-      "(Ldev/fruit/androiddemo/WiredPlatformView;)V",
-      &[JValue::Object(
-        c.get_raw_view()?
-          .lock()
-          .unwrap()
-          .downcast_ref::<GlobalRef>()
-          .expect("Not a Wired NativeView ref")
-          .as_obj(),
-      )],
-    )?;
-    Ok(())
-  }
-  /// Should not tear down the child (same as remove_child)
-  fn remove_child_index(&mut self, idx: usize) -> Result<(), Box<dyn Error>> {
-    let env = self.jvm.get_env()?;
-    env.call_method(
-      self.native_view.lock().unwrap().as_obj(),
-      "removeChildIndex",
-      "(I)V",
-      &[JValue::Int(idx as i32)],
-    )?;
-    Ok(())
-  }
+        )],
+      )?;
+      Ok(())
+    }
+    /// Do not insert a child that is already there! undefined behavior!
+    fn insert_child_at(&mut self, c: &PlatformView, idx: usize) -> Result<(), Box<dyn Error>> {
+      let env = self.jvm.get_env()?;
+      env.call_method(
+        self.native_view.lock().unwrap().as_obj(),
+        "insertChildAt",
+        "(Ldev/fruit/androiddemo/WiredPlatformView;I)V",
+        &[
+          JValue::Object(
+            c.get_raw_view()?
+              .lock()
+              .unwrap()
+              .downcast_ref::<GlobalRef>()
+              .expect("Not a Wired NativeView ref")
+              .as_obj(),
+          ),
+          JValue::Int(idx as i32),
+        ],
+      )?;
+      Ok(())
+    }
+    /// should not tear down the child! since it may be placed somewhere else later
+    fn remove_child(&mut self, c: &PlatformView) -> Result<(), Box<dyn Error>> {
+      let env = self.jvm.get_env()?;
+      env.call_method(
+        self.native_view.lock().unwrap().as_obj(),
+        "removeChild",
+        "(Ldev/fruit/androiddemo/WiredPlatformView;)V",
+        &[JValue::Object(
+          c.get_raw_view()?
+            .lock()
+            .unwrap()
+            .downcast_ref::<GlobalRef>()
+            .expect("Not a Wired NativeView ref")
+            .as_obj(),
+        )],
+      )?;
+      Ok(())
+    }
+    /// Should not tear down the child (same as remove_child)
+    fn remove_child_index(&mut self, idx: usize) -> Result<(), Box<dyn Error>> {
+      let env = self.jvm.get_env()?;
+      env.call_method(
+        self.native_view.lock().unwrap().as_obj(),
+        "removeChildIndex",
+        "(I)V",
+        &[JValue::Int(idx as i32)],
+      )?;
+      Ok(())
+    }
 
-  fn get_raw_view(&self) -> Result<Arc<Mutex<dyn Any>>, Box<dyn Error>> {
-    Ok(self.native_view.clone())
+    fn get_raw_view(&self) -> Result<Arc<Mutex<dyn Any>>, Box<dyn Error>> {
+      Ok(self.native_view.clone())
+    }
   }
-}
 }

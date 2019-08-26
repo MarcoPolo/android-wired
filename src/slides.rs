@@ -57,8 +57,8 @@ pub fn main() {
       });
       StackLayout::new()
         .with(|| {
-          Button::new(on_prev).label("Previous");
-          Button::new(on_next).label("Next");
+          Button::new(on_prev).text("Previous");
+          Button::new(on_next).text("Next");
         })
         .orientation(Orientation::Horizontal);
     })

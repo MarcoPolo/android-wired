@@ -52,7 +52,12 @@ pub trait Padding: UpdateProp<f32> + UpdatePropSignal<f32> + Sized {
 }
 
 pub trait SetText: UpdateProp<String> + UpdatePropSignal<String> + Sized {
-  prop_method!(text, String);
+  fn text<T: Into<String>>(mut self, s: T) -> Self {
+    self
+      .update_prop("text", s.into())
+      .expect("Couldn't update string");
+    self
+  }
   prop_method_signal!(text, String);
 }
 
