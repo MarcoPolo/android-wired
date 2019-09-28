@@ -320,13 +320,16 @@ class MainActivity : AppCompatActivity() {
         val rootView = WiredLinearLayout(this)
         setContentView(rootView)
 
-        val factory = WiredViewFactory(this)
-        init(factory, rootView)
-        androidExecutor.run()
+//        val factory = WiredViewFactory(this)
+//        init(factory, rootView)
+//        androidExecutor.run()
 
         Log.d("fruit", "Finished init")
+
+        something(this, rootView)
     }
 
+    external fun something(ctx: Context, rootView: ViewGroup)
     external fun hello(to: String): String
     external fun init(
         factory: WiredViewFactory,
